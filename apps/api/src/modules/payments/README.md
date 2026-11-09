@@ -85,7 +85,7 @@ not imply completion before the related credit movement is confirmed.
 
 Invalid origins stop startup. The removed `PAYMENTS_CHECKOUT_RETURN_URL` setting also stops startup, even if empty;
 replace it with `PAYMENTS_CHECKOUT_URL` and remove the old key. Errors omit configured values.
-See the [Paddle sandbox runbook](../../../../../docker/paddle-dev/README.md) for checkout, tunnel, and webhook replay.
+Provision Paddle sandbox checkout and webhook delivery separately; the repository does not start those services.
 
 ## Validation
 
@@ -97,4 +97,4 @@ under `src/infrastructure/`.
 `application/payment-event.handler.integration.spec.ts` requires `TEST_PAYMENT_WEBHOOK_POSTGRES_URL` pointing to
 an owned disposable test database. It covers concurrent/replayed events, interrupted processing, inverse ordering,
 shortfalls, and active reservation holds. [Bruno credit purchases](../../../../../bruno/credit-purchases/README.md)
-exercises the signed stub checkout/adjustment flow; genuine Paddle behavior requires the sandbox runbook.
+exercises the signed stub checkout/adjustment flow; genuine Paddle behavior requires a separately provisioned sandbox.

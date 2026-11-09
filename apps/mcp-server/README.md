@@ -64,13 +64,13 @@ Direct verification may return an ID to poll (repeatedly read until complete). B
 
 ```sh
 corepack pnpm --filter @tuposoft/lead-email-finder-mcp-server build
-API_URL=http://127.0.0.1:53000 node apps/mcp-server/dist/main.js
+API_URL=http://127.0.0.1:3000 node apps/mcp-server/dist/main.js
 ```
 
-Compose supplies the internal API URL and publishes host port 53002 by default. Neither the Node listener nor
-Compose limits that port to loopback (the same machine only); restrict access when using a shared host. No public
-deployment or OAuth authorization server (token-based delegation service) is provisioned. Cloud clients need a
-reachable connector URL. Check `/health`, choose unused ports, and stop only owned processes.
+Set `API_URL` to the separately provisioned API or gateway. The connector listens on port 3002 by default;
+`PORT` overrides it. The Node listener does not limit access to loopback; restrict access when using a shared host.
+No public deployment or OAuth authorization server (token-based delegation service) is provisioned. Cloud clients
+need a reachable connector URL. Check `/health`, choose unused ports, and stop only owned processes.
 
 Use an API key scoped to the customer organization and required tools. Keep it in private configuration; never
 print or attach it or substitute a privileged platform credential.

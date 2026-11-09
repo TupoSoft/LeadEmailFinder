@@ -30,7 +30,7 @@ COPY tsconfig.base.json ./
 COPY apps/api ./apps/api
 COPY config ./config
 
-# Compile during the image build; Compose retains the existing source-watch workflow.
+# Compile during the image build; the startup command watches for source changes.
 WORKDIR /app/apps/api
 RUN pnpm build
 

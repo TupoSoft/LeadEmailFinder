@@ -1,8 +1,6 @@
 #!/bin/sh
 # Focused unit tests and a malformed-manifest/credentials table test for render-config.sh. Requires `jq` on
-# the host running this script (no Docker needed) — this is the "renderer's focused unit tests and
-# malformed-manifest table tests" step in .agents/plans/proxy-fleet/11-fleet-capable-3proxy-image.md's
-# Validation section, run separately from and before the smoke harness.
+# the host running this script (no Docker needed).
 set -eu
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"

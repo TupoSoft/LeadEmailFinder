@@ -1,8 +1,8 @@
 # Lead Email Finder
 
 API and web application for email discovery and verification. The API runs on NestJS; the web application uses React
-and Vite. PostgreSQL stores application data, Redis handles queues and caches, and Garage provides S3-compatible
-object storage for uploaded files and results.
+and Vite. PostgreSQL stores application data, Redis handles queues and caches, and S3-compatible object storage
+holds uploaded files and results.
 
 The API lives in `apps/api/src/`, with business modules in `modules/` and shared libraries in `libs/`;
 root API commands delegate to that workspace. The web application and MCP server live in `apps/web/` and
@@ -10,41 +10,34 @@ root API commands delegate to that workspace. The web application and MCP server
 
 ## Getting Started
 
-Install Docker with Compose v2. For commands outside containers, use Node 24 and the pnpm version pinned in
-[`package.json`](package.json); Corepack selects that version.
+Use Node 24 and the pnpm version pinned in [`package.json`](package.json); Corepack selects that version.
 
 ```sh
 git clone https://github.com/TupoSoft/LeadEmailFinder.git
 cd LeadEmailFinder
 corepack pnpm install --frozen-lockfile
-docker compose -f docker/compose.yaml up -d --build
 ```
 
-Wait for API and web health checks before opening the product. Configure the Keycloak realm, application identities,
-and development data separately; starting Compose does not provision them.
+Provision PostgreSQL, Redis, S3-compatible storage, and the Keycloak realm separately. Supply the API settings
+defined in [`EnvironmentVariablesDto`](apps/api/src/environment-variables.dto.ts), including database/storage
+connections and credentials. See the [browser-session configuration](apps/api/src/modules/bff-session/README.md#configuration)
+and [payment configuration](apps/api/src/modules/payments/README.md#configuration) for those integrations. Application
+identities and development data also require separate provisioning.
 
-| Service             | Host address                          | Purpose                                            |
-| ------------------- | ------------------------------------- | -------------------------------------------------- |
-| Web and API gateway | <http://localhost:53000>              | Product; forwards API requests                     |
-| Swagger             | <http://localhost:53000/docs>         | Interactive API documentation                      |
-| OpenAPI             | <http://localhost:53000/openapi.json> | Machine-readable browser API contract              |
-| Health              | <http://localhost:53000/health>       | API readiness check                                |
-| PostgreSQL          | `localhost:55432`                     | Application database                               |
-| Redis               | `localhost:56379`                     | Queues and caches                                  |
-| Bull Board          | <http://localhost:54000>              | Queue dashboard                                    |
-| Garage              | <http://localhost:59000>              | S3-compatible file storage                         |
-| MCP server          | <http://localhost:53002/health>       | AI-agent access through the Model Context Protocol |
-
-The API listens internally on `api:3000`; only the gateway publishes the browser API. See
-[`docker/README.md`](docker/README.md) for routing and network recovery.
-
-Keep development credentials and `docker/secrets/` private. Never commit real credentials, browser enrollment
-secrets, or raw request/response captures containing authentication data.
+Standalone Docker images remain available; see [`docker/README.md`](docker/README.md) for builds and gateway routing.
+Keep credentials private. Never commit real credentials, browser enrollment secrets, or raw request/response captures
+containing authentication data.
 
 ## Development
 
-The Compose stack uses `NODE_ENV=development` and optional overrides from ignored `docker/.env`. Database, Redis,
-and storage credentials come from files in `docker/secrets/`.
+After configuring the API environment and its external services, start the API in watch mode:
+
+```sh
+corepack pnpm start
+```
+
+The API listens on port 3000 by default. `/health` checks readiness, `/docs` serves Swagger, and `/openapi.json`
+publishes the browser API contract.
 
 For UI development:
 
@@ -52,14 +45,15 @@ For UI development:
 corepack pnpm --filter ./apps/web dev
 ```
 
-Vite forwards API requests to `http://localhost:53000`; `WEB_API_PROXY_TARGET` overrides that destination. Use the
+Vite forwards API requests to `http://localhost:53000`; set `WEB_API_PROXY_TARGET=http://localhost:3000` to use the
+API's default local port, or point it at your configured gateway. Use the
 built gateway for authenticated browser workflows: `APP_BASE_URL` controls login redirects and accepted browser
 origins. An origin is the scheme, hostname, and port, without a path.
 
-For a debugger, start the Node Inspector endpoint and attach to `localhost:59229`:
+For a debugger, start the Node Inspector endpoint and attach to `localhost:9229`:
 
 ```sh
-docker compose -f docker/compose.yaml -f docker/compose.debug.yaml up -d --build
+corepack pnpm debug
 ```
 
 ### Authentication Routing
@@ -73,8 +67,7 @@ on the server so browser JavaScript never stores provider tokens.
 | `OIDC_BACKCHANNEL_URL` | Optional internal URL for server-side token and logout calls                 |
 | `OIDC_JWKS_URI`        | Optional URL for JWKS, the public keys used to verify signed identity tokens |
 
-The local public issuer is `http://localhost:58080/realms/lead-email-finder`; container-to-container calls use
-`http://keycloak:8080/realms/lead-email-finder`. Internal routing must not change the trusted public issuer.
+Configure the public issuer for the provisioned realm. Internal routing must not change the trusted public issuer.
 
 ### Browser API Contracts
 
@@ -92,8 +85,7 @@ where another website tries to act through the user's session. JavaScript cannot
 
 ### Production Configuration
 
-The development stack uses plaintext local connections and automatic schema synchronization; it is not a production
-template. `NODE_ENV=production` requires:
+`NODE_ENV=production` requires:
 
 - PostgreSQL and Redis connections with TLS, encryption that also verifies the server's certificate. Standalone
   Redis uses `rediss://`; Redis Sentinel, which discovers the current primary server, also requires TLS on discovery
@@ -108,26 +100,6 @@ External account discovery means checking a provider for evidence that an accoun
 The runtime always reads `config/privacy/account-discovery-approvals.yaml`, even with providers disabled; a missing
 or malformed file prevents initialization. Retention cleanup for verification data is incomplete; do not assume a
 documented lifetime is automatically enforced.
-
-### Optional Verification Fixtures
-
-For SMTP (Simple Mail Transfer Protocol, used between mail servers) testing without outbound port 25, first
-provision the disposable base stack, then enable the local overlay:
-
-```sh
-docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml up -d --build
-```
-
-The fixture uses internal DNS (domain-name lookup), a SOCKS5 proxy (a relay for outbound connections), and Mailpit
-(a test mail server) on port 2525. It publishes none of those services to the host. Mailpit accepts every recipient,
-so passing proves local wiring rather than external deliverability. Follow the
-[SMTP collection guide](bruno/smtp-dev/README.md) for cleanup and
-[older-network recovery](docker/README.md#recover-an-older-smtp-network) when needed.
-
-For real sandbox payments, follow the [Paddle fixture](docker/paddle-dev/README.md). A sandbox is the provider's
-isolated test environment. Its temporary tunnel exposes only checkout, health, and webhook routes. A webhook is a
-provider-to-API event callback; only a verified payment event grants credits. Deactivate the fixture-owned
-notification destination before removing the tunnel and its secrets.
 
 ## Validation
 

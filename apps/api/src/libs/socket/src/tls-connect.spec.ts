@@ -4,9 +4,9 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { tlsConnectAsync } from './tls-connect'
 
-const fixtureKey = readFileSync(resolve(__dirname, '../../../../../../docker/smtp-dev/tls/smtp.key'))
-const fixtureCertificate = readFileSync(resolve(__dirname, '../../../../../../docker/smtp-dev/tls/smtp.crt'))
-const fixtureCa = readFileSync(resolve(__dirname, '../../../../../../docker/smtp-dev/tls/ca.crt'))
+const fixtureKey = readFileSync(resolve(__dirname, '../../../../test/fixtures/smtp-tls/smtp.key'))
+const fixtureCertificate = readFileSync(resolve(__dirname, '../../../../test/fixtures/smtp-tls/smtp.crt'))
+const fixtureCa = readFileSync(resolve(__dirname, '../../../../test/fixtures/smtp-tls/ca.crt'))
 
 describe('tlsConnectAsync', () => {
     let server: NetServer | TlsServer

@@ -5,9 +5,8 @@
 # file, validates both, renders /run/3proxy/3proxy.cfg, and execs 3proxy.
 #
 # Base: the 0.9.8.busybox release variant published by https://github.com/3proxy/3proxy — musl-linked (built
-# against docker.io/alpine), unlike the bare :0.9.8 tag (glibc, FROM scratch) already used by
-# docker/smtp-dev/3proxy.cfg's compose service. The musl build lets the binary run directly against this
-# image's own Alpine musl loader with no relinking.
+# against docker.io/alpine). The musl build lets the binary run directly against this image's own
+# Alpine musl loader with no relinking.
 FROM ghcr.io/3proxy/3proxy:0.9.8.busybox@sha256:5cd3650349be841b88c5742336d1f8031edd9596b3e8c113c6e62bb911fb48bb AS proxy-base
 
 FROM alpine:3.22

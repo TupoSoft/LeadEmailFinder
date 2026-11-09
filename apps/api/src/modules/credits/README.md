@@ -78,4 +78,4 @@ and reserve-versus-close races. A closed denial must remain closed after repleni
 
 Bruno (the HTTP collection runner) covers [platform credit administration](../../../../../bruno/platform-credits/README.md),
 [payment/billing summary](../../../../../bruno/credit-purchases/README.md), and verification charging through
-[SMTP](../../../../../bruno/smtp-dev/README.md) and [batch](../../../../../bruno/batch-verification/README.md) workflows.
+[batch](../../../../../bruno/batch-verification/README.md) workflows.
