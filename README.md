@@ -101,61 +101,6 @@ The runtime always reads `config/privacy/account-discovery-approvals.yaml`, even
 or malformed file prevents initialization. Retention cleanup for verification data is incomplete; do not assume a
 documented lifetime is automatically enforced.
 
-## Cloudflare Web Deployment
-
-The Cloudflare target serves the web application's static assets at `https://leademailfinder.com` for authorized
-testers, with SPA (single-page application) fallback for browser routes. It does not deploy or connect the API,
-application authentication, databases, queues, or object storage. In-app sign-in and API-backed workflows are unavailable.
-The existing local Vite commands and Docker gateway remain separate deployment options.
-
-Protect the Worker with the **Lead Email Finder testers** Cloudflare Access application, selecting **All traffic**.
-Attach the existing reusable **TupoLink testers** policy, use the email one-time PIN provider, and set a 24-hour
-Access session. Manage tester membership in Cloudflare; the policy is shared with other applications. Access
-protects every request, including static assets, independently of in-app authentication. Deployment does not
-create or update this Access configuration. The Worker configuration explicitly disables `workers.dev` and
-version URLs so they cannot provide an alternate public entry point.
-
-Connect `TupoSoft/LeadEmailFinder` to [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/)
-in **Workers & Pages**, then configure the Worker using these settings:
-
-| Setting                       | Value                                                                                                |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Root directory                | Repository root (`/`)                                                                                |
-| Production branch             | `master`                                                                                             |
-| Build command                 | `corepack pnpm --filter @tuposoft/lead-email-finder-web build:cloudflare`                            |
-| Deploy command                | `corepack pnpm --filter @tuposoft/lead-email-finder-web exec cf deploy --prebuilt --mode production` |
-| Build variable `NODE_VERSION` | `24.22.1`                                                                                            |
-| Build variable `PNPM_VERSION` | `10.33.0`                                                                                            |
-| Non-production branch builds  | Disabled                                                                                             |
-
-Keep the default dependency installation enabled so the pinned pnpm version installs the workspace lockfile.
-Use the deployment API token configured by Workers Builds for the target account; this static deployment does
-not need API application secrets. Once connected, pushes to `master` build and deploy automatically. Repository
-configuration alone does not establish that the Cloudflare connection or automatic deployment is active.
-
-The Worker configuration declares `leademailfinder.com` as its production Custom Domain. Before the first
-deployment, ensure that domain belongs to an active Cloudflare zone in the deployment account. An existing
-CNAME at the target hostname must be resolved before attaching the Custom Domain. Cloudflare provisions its
-DNS record and TLS certificate automatically; preserve existing MX, SPF, DKIM, DMARC, and verification records.
-See [Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/).
-
-To prepare and validate the same deployment locally without publishing:
-
-```sh
-corepack pnpm install --frozen-lockfile
-corepack pnpm --filter @tuposoft/lead-email-finder-web build:cloudflare
-corepack pnpm --filter @tuposoft/lead-email-finder-web exec cf deploy --prebuilt --mode production --dry-run
-```
-
-Run `corepack pnpm --filter @tuposoft/lead-email-finder-web preview:cloudflare` to inspect the built target locally.
-Local preview and `test:cloudflare` verify static hosting, not the deployed Access policy.
-
-After deployment, verify that anonymous requests to `/` and a built `/assets/` file redirect to Access sign-in.
-An authorized tester should confirm SPA navigation and hard refreshes, HTML with `Cache-Control: no-cache`,
-immutable hashed assets, and `/accept-invitation` plus its descendants with `Cache-Control: no-store`
-and `Referrer-Policy: no-referrer`. Confirm that `workers.dev` and version URLs remain disabled. The `_headers`
-file preserves the static security policy; no API health endpoint is part of this target.
-
 ## Validation
 
 Use focused checks for the changed area:
@@ -178,8 +123,6 @@ report which actually ran.
 
 CI runs the remaining backend, web, image, and browser checks on independent GitHub-hosted Ubuntu 24.04 machines.
 Jobs can share pnpm downloads and Docker build-layer caches, but not workspaces or running containers.
-Frozen-lockfile installs and cache-miss builds remain required. Validation builds images without publishing them;
-GitHub Actions does not deploy the application. The separately configured Workers Builds connection handles the
-Cloudflare web deployment described above.
+Frozen-lockfile installs and cache-miss builds remain required. Validation builds images without publishing them.
 
 For ownership and dependency rules, see the [business-module guide](apps/api/src/modules/README.md).
