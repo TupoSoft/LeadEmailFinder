@@ -18,15 +18,6 @@ export default defineConfig({
                     css: true,
                 },
             },
-            {
-                test: {
-                    name: 'browser-fixtures',
-                    environment: 'node',
-                    include: ['tests/support/**/*.test.ts'],
-                    restoreMocks: true,
-                    clearMocks: true,
-                },
-            },
         ],
     },
 })

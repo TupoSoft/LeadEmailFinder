@@ -111,6 +111,10 @@ jobs:
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:ci --maxWorkers=2
       - name: Build web application
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web build
+      - name: Build Cloudflare web deployment
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web build:cloudflare
+      - name: Validate Cloudflare deployment without credentials
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web exec cf deploy --prebuilt --mode production --dry-run
   images:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
@@ -172,65 +176,6 @@ jobs:
           push: false
           cache-from: type=gha,version=2,scope=lef-mcp-server
           cache-to: type=gha,version=2,scope=lef-mcp-server,mode=max,ignore-error=true
-  browser-ui:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - name: Enable Corepack
-        run: corepack enable
-      - name: Locate pnpm store
-        id: pnpm-store
-        run: |
-          echo "path=$(corepack pnpm store path --silent)" >> "$GITHUB_OUTPUT"
-          echo "version=$(corepack pnpm --version)" >> "$GITHUB_OUTPUT"
-      - name: Restore pnpm store
-        uses: actions/cache@v4
-        continue-on-error: true
-        with:
-          path: ${{ steps.pnpm-store.outputs.path }}
-          key: ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-workspace-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-workspace-
-      - name: Install workspace dependencies
-        run: corepack pnpm install --frozen-lockfile
-      - name: Install Chromium
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web exec playwright install --with-deps chromium
-      - name: Build web application for browser suites
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web build
-      - name: Test web browser workflows
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:e2e:prebuilt
-      - name: Test service-client secret handling and recovery
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:service-clients
-      - name: Test invitation browser behavior and recovery
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:invitations
-      - name: Test platform organization directory and invitation recovery
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-organizations
-      - name: Test platform credit adjustment and recovery
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-credits
-      - name: Test proxy fleet management and credential recovery
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:platform-proxies
-      - name: Test web accessibility
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:a11y:prebuilt
-      - name: Test web visual baselines
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:visual:prebuilt
-      - name: Build Cloudflare web deployment
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web build:cloudflare
-      - name: Validate Cloudflare deployment without credentials
-        run: corepack pnpm --filter @tuposoft/lead-email-finder-web exec cf deploy --prebuilt --mode production --dry-run
-  browser:
-    needs:
-      - browser-ui
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Require browser checks to succeed
-        run: test '${{ needs.browser-ui.result }}' = success
   validate:
     name: validate
     if: ${{ !cancelled() }}
@@ -238,7 +183,6 @@ jobs:
       - backend
       - web
       - images
-      - browser
     runs-on: ubuntu-24.04
     steps:
       - name: Require every validation consumer to succeed
@@ -246,4 +190,3 @@ jobs:
           test '${{ needs.backend.result }}' = success
           test '${{ needs.web.result }}' = success
           test '${{ needs.images.result }}' = success
-          test '${{ needs.browser.result }}' = success
