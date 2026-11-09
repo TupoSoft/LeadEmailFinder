@@ -103,10 +103,17 @@ documented lifetime is automatically enforced.
 
 ## Cloudflare Web Deployment
 
-The Cloudflare target publishes the web application's static assets at `https://leademailfinder.com`, with SPA
-(single-page application) fallback for browser routes. It does not deploy or connect the API, authentication,
-databases, queues, or object storage. Sign-in and API-backed workflows are unavailable on this deployment.
+The Cloudflare target serves the web application's static assets at `https://leademailfinder.com` for authorized
+testers, with SPA (single-page application) fallback for browser routes. It does not deploy or connect the API,
+application authentication, databases, queues, or object storage. In-app sign-in and API-backed workflows are unavailable.
 The existing local Vite commands and Docker gateway remain separate deployment options.
+
+Protect the Worker with the **Lead Email Finder testers** Cloudflare Access application, selecting **All traffic**.
+Attach the existing reusable **TupoLink testers** policy, use the email one-time PIN provider, and set a 24-hour
+Access session. Manage tester membership in Cloudflare; the policy is shared with other applications. Access
+protects every request, including static assets, independently of in-app authentication. Deployment does not
+create or update this Access configuration. The Worker configuration explicitly disables `workers.dev` and
+version URLs so they cannot provide an alternate public entry point.
 
 Connect `TupoSoft/LeadEmailFinder` to [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/)
 in **Workers & Pages**, then configure the Worker using these settings:
@@ -141,11 +148,13 @@ corepack pnpm --filter @tuposoft/lead-email-finder-web exec cf deploy --prebuilt
 ```
 
 Run `corepack pnpm --filter @tuposoft/lead-email-finder-web preview:cloudflare` to inspect the built target locally.
+Local preview and `test:cloudflare` verify static hosting, not the deployed Access policy.
 
-After deployment, open `https://leademailfinder.com` and hard-refresh a browser route such as `/app`. Confirm
-that the site and assets load, ordinary HTML has `Cache-Control: no-cache`, hashed `/assets/` files are immutable,
-and `/accept-invitation` plus its descendants return `Cache-Control: no-store` and `Referrer-Policy: no-referrer`.
-The `_headers` file preserves the static security policy; no API health endpoint is part of this target.
+After deployment, verify that anonymous requests to `/` and a built `/assets/` file redirect to Access sign-in.
+An authorized tester should confirm SPA navigation and hard refreshes, HTML with `Cache-Control: no-cache`,
+immutable hashed assets, and `/accept-invitation` plus its descendants with `Cache-Control: no-store`
+and `Referrer-Policy: no-referrer`. Confirm that `workers.dev` and version URLs remain disabled. The `_headers`
+file preserves the static security policy; no API health endpoint is part of this target.
 
 ## Validation
 
