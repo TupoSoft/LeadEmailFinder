@@ -2,7 +2,7 @@ import { createLogger, defineConfig, loadEnv } from 'vite'
 import type { Plugin, ProxyOptions, ViteDevServer } from 'vite'
 import react from '@vitejs/plugin-react-swc'
 import { isApiRequest, isInvitationDocument, STATIC_SECURITY_HEADERS } from './gateway-routes.ts'
-import { resolveCheckoutAllowedOrigins } from '../../src/libs/common/src/checkout-redirect.ts'
+import { resolveCheckoutAllowedOrigins } from '../api/src/libs/common/src/checkout-redirect.ts'
 
 // Vite's style injection and React refresh need a nonce; this fixed value is for
 // local development only and is never included in the built Nginx document.

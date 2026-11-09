@@ -1,6 +1,6 @@
 #!/bin/bash
 
-NEST_CLI_FILE="nest-cli.json"
+NEST_CLI_FILE="apps/api/nest-cli.json"
 
 APPS=$(jq -c \
   --arg default_project_root "$(jq -r '.root' "$NEST_CLI_FILE")" \
@@ -16,7 +16,7 @@ LIBRARIES=$(jq -c '[.projects | to_entries[] | select(.value.type == "library") 
 COMMON_FILTERS=(
   "package.json"
   "pnpm-lock.yaml"
-  "nest-cli.json"
+  "apps/api/nest-cli.json"
   "tsconfig*.json"
   "Dockerfile"
 )

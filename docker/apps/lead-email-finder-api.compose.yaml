@@ -8,6 +8,7 @@ services:
     volumes:
       - "../..:/app"
       - "/app/node_modules"
+      - "/app/apps/api/node_modules"
     dns:
       - 1.1.1.1
       - 8.8.8.8
@@ -52,7 +53,6 @@ services:
     command:
       - pnpm
       - debug
-      - lead-email-finder-api
     ports:
       - '9229:9229'
     profiles: !override [debug]

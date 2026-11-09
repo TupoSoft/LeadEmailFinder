@@ -20,16 +20,18 @@ RUN --mount=type=cache,target=/var/cache/apk \
 # Enable the pnpm version pinned by package.json.
 RUN corepack enable
 
-# The API is the root package. Its image needs neither web workspace manifests nor assets.
+# Install the API dependencies and the shared development tools independently of the web app.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/api/package.json apps/api/package.json
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
-    pnpm --filter @tuposoft/lead-email-finder install --frozen-lockfile
+    pnpm --filter @tuposoft/lead-email-finder --filter @tuposoft/lead-email-finder-api... install --frozen-lockfile
 
-COPY nest-cli.json tsconfig*.json .swcrc jest.config.ts ./
-COPY src ./src
+COPY tsconfig.base.json ./
+COPY apps/api ./apps/api
 COPY config ./config
 
 # Compile during the image build; Compose retains the existing source-watch workflow.
+WORKDIR /app/apps/api
 RUN pnpm build
 
 # Debug
