@@ -12,7 +12,7 @@ class DocumentationTestModule {}
 describe('API documentation routes', () => {
     let app: INestApplication
     const browser = JSON.parse(
-        readFileSync(resolve(__dirname, '../../../../../../packages/api-client/openapi/lead-email-finder.json'), 'utf8'),
+        readFileSync(resolve(__dirname, '../../../../packages/api-client/openapi/lead-email-finder.json'), 'utf8'),
     ) as OpenAPIObject
 
     beforeAll(async () => {

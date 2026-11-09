@@ -21,7 +21,7 @@ import { ServiceClientDisablementService } from '../application/service-client-d
 import { ServiceClientListingService } from '../application/service-client-listing.service'
 import { ServiceClientRotationService } from '../application/service-client-rotation.service'
 import { ServiceClientsController } from './service-clients.controller'
-import { configureServiceClientResponseHeaders } from '../../../../../lead-email-finder-api/src/configure-service-client-response-headers'
+import { configureServiceClientResponseHeaders } from '../../../../../configure-service-client-response-headers'
 import {
     DisabledServiceClientRotationError,
     ServiceClientAccessDeniedError,
