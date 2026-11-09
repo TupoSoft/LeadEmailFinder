@@ -120,6 +120,35 @@ export function createPlaywrightConfig(suiteName = 'ui'): PlaywrightTestConfig {
         })
     }
 
+    if (suiteName === 'cloudflare') {
+        const cloudflareOrigin = 'http://127.0.0.1:4174'
+        return defineConfig({
+            testDir: './tests/cloudflare',
+            fullyParallel: true,
+            forbidOnly: Boolean(process.env.CI),
+            retries: 0,
+            workers: 2,
+            reporter: 'list',
+            outputDir: join(tmpdir(), 'lef-cloudflare-results'),
+            use: {
+                baseURL: cloudflareOrigin,
+                browserName: 'chromium',
+                channel: 'chromium',
+                locale: 'en-US',
+                trace: 'off',
+                screenshot: 'off',
+                video: 'off',
+            },
+            webServer: {
+                command: 'pnpm preview:cloudflare --host 127.0.0.1 --port 4174 --strictPort',
+                url: cloudflareOrigin,
+                reuseExistingServer: false,
+                timeout: 30_000,
+            },
+            projects: viewportProjects,
+        })
+    }
+
     if (suiteName === 'gateway') {
         return defineConfig({
             testDir: './tests/gateway',

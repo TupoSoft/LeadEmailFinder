@@ -153,3 +153,7 @@ tmp
 .dev/auth/
 .dev/auth-tools/
 .dev/auth-runtime/
+
+# Cloudflare build output, local state, and secrets
+.cloudflare/
+.dev.vars*

@@ -70,6 +70,16 @@ describe('sensitive browser suite integration boundaries', () => {
         expect(gateway.workers).toBe(1)
     })
 
+    it('tests Cloudflare output through its own runtime without reusing the ordinary preview', () => {
+        const cloudflare = createPlaywrightConfig('cloudflare')
+        expect(cloudflare.testDir).toBe('./tests/cloudflare')
+        expect(cloudflare.webServer).toMatchObject({
+            command: 'pnpm preview:cloudflare --host 127.0.0.1 --port 4174 --strictPort',
+            reuseExistingServer: false,
+        })
+        expect(cloudflare.use).toMatchObject({ trace: 'off', screenshot: 'off', video: 'off' })
+    })
+
     it.each(['', 'unknown-suite', 'toString', '__proto__'])('rejects an invalid suite %j', suite => {
         expect(() => createPlaywrightConfig(suite)).toThrow()
     })

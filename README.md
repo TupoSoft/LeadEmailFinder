@@ -101,6 +101,52 @@ The runtime always reads `config/privacy/account-discovery-approvals.yaml`, even
 or malformed file prevents initialization. Retention cleanup for verification data is incomplete; do not assume a
 documented lifetime is automatically enforced.
 
+## Cloudflare Web Deployment
+
+The Cloudflare target publishes the web application's static assets at `https://leademailfinder.com`, with SPA
+(single-page application) fallback for browser routes. It does not deploy or connect the API, authentication,
+databases, queues, or object storage. Sign-in and API-backed workflows are unavailable on this deployment.
+The existing local Vite commands and Docker gateway remain separate deployment options.
+
+Connect `TupoSoft/LeadEmailFinder` to [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/)
+in **Workers & Pages**, then configure the Worker using these settings:
+
+| Setting                       | Value                                                                                                |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Root directory                | Repository root (`/`)                                                                                |
+| Production branch             | `master`                                                                                             |
+| Build command                 | `corepack pnpm --filter @tuposoft/lead-email-finder-web build:cloudflare`                            |
+| Deploy command                | `corepack pnpm --filter @tuposoft/lead-email-finder-web exec cf deploy --prebuilt --mode production` |
+| Build variable `NODE_VERSION` | `24.22.1`                                                                                            |
+| Build variable `PNPM_VERSION` | `10.33.0`                                                                                            |
+| Non-production branch builds  | Disabled                                                                                             |
+
+Keep the default dependency installation enabled so the pinned pnpm version installs the workspace lockfile.
+Use the deployment API token configured by Workers Builds for the target account; this static deployment does
+not need API application secrets. Once connected, pushes to `master` build and deploy automatically. Repository
+configuration alone does not establish that the Cloudflare connection or automatic deployment is active.
+
+The Worker configuration declares `leademailfinder.com` as its production Custom Domain. Before the first
+deployment, ensure that domain belongs to an active Cloudflare zone in the deployment account. An existing
+CNAME at the target hostname must be resolved before attaching the Custom Domain. Cloudflare provisions its
+DNS record and TLS certificate automatically; preserve existing MX, SPF, DKIM, DMARC, and verification records.
+See [Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/).
+
+To prepare and validate the same deployment locally without publishing:
+
+```sh
+corepack pnpm install --frozen-lockfile
+corepack pnpm --filter @tuposoft/lead-email-finder-web build:cloudflare
+corepack pnpm --filter @tuposoft/lead-email-finder-web exec cf deploy --prebuilt --mode production --dry-run
+```
+
+Run `corepack pnpm --filter @tuposoft/lead-email-finder-web preview:cloudflare` to inspect the built target locally.
+
+After deployment, open `https://leademailfinder.com` and hard-refresh a browser route such as `/app`. Confirm
+that the site and assets load, ordinary HTML has `Cache-Control: no-cache`, hashed `/assets/` files are immutable,
+and `/accept-invitation` plus its descendants return `Cache-Control: no-store` and `Referrer-Policy: no-referrer`.
+The `_headers` file preserves the static security policy; no API health endpoint is part of this target.
+
 ## Validation
 
 Use focused checks for the changed area:
@@ -124,6 +170,7 @@ report which actually ran.
 CI runs the remaining backend, web, image, and browser checks on independent GitHub-hosted Ubuntu 24.04 machines.
 Jobs can share pnpm downloads and Docker build-layer caches, but not workspaces or running containers.
 Frozen-lockfile installs and cache-miss builds remain required. Validation builds images without publishing them;
-this repository does not schedule application deployment.
+GitHub Actions does not deploy the application. The separately configured Workers Builds connection handles the
+Cloudflare web deployment described above.
 
 For ownership and dependency rules, see the [business-module guide](apps/api/src/modules/README.md).

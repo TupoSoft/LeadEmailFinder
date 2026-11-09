@@ -40,7 +40,10 @@ function staticHeaders(development: boolean): Plugin {
     return { name: 'static-security-headers', configureServer: configure, configurePreviewServer: configure }
 }
 
-export default defineConfig(({ command, isPreview, mode }) => {
+export default defineConfig(async ({ command, isPreview, mode }) => {
+    // Cloudflare uses a separate build output; Docker and local suites keep dist/.
+    const cloudflareBuild = process.env.LEF_CLOUDFLARE_BUILD === '1'
+    const cloudflarePlugins = cloudflareBuild ? (await import('@cloudflare/vite-plugin')).cloudflare() : []
     const development = command === 'serve' && !isPreview
     const environment = loadEnv(mode, process.cwd(), '')
     const target = environment.WEB_API_PROXY_TARGET || 'http://localhost:53000'
@@ -68,12 +71,12 @@ export default defineConfig(({ command, isPreview, mode }) => {
         },
     } satisfies Record<string, ProxyOptions>
     return {
-        plugins: [react(), staticHeaders(development)],
+        plugins: [react(), ...(cloudflareBuild ? cloudflarePlugins : [staticHeaders(development)])],
         define: { __PAYMENTS_CHECKOUT_ALLOWED_ORIGINS__: JSON.stringify(checkoutOrigins) },
         customLogger: logger,
         html: development ? { cspNonce: DEVELOPMENT_NONCE } : undefined,
-        server: { proxy },
-        preview: { proxy },
+        server: cloudflareBuild ? undefined : { proxy },
+        preview: cloudflareBuild ? undefined : { proxy },
         build: { target: 'es2022' },
     }
 })
