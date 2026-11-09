@@ -19,7 +19,7 @@ export interface BillingSummary {
     readonly available: number
 }
 
-/** Matches `EmailVerificationResponseDto` (`apps/api/src/libs/modules/email-verification/src/api/email-verification-response.dto.ts`)
+/** Matches `EmailVerificationResponseDto` (`apps/api/src/modules/email-verification/src/api/email-verification-response.dto.ts`)
  * as actually serialized over HTTP -- `createdAt` is `toClassOnly` and never appears on the wire, and `operation`
  * is only ever populated on the synchronous route's completed (`201`) response, never on `GET /verifications/:id`. */
 export interface EmailVerificationResult {

@@ -22,4 +22,4 @@ SSE-KMS and development mappings. It is exported only through the testing-specif
 ## Validation
 
 Email-verification input/result adapter tests and API factory/module tests exercise the mappings.
-Review imports against the [business-module dependency rules](../modules/README.md).
+Review imports against the [business-module dependency rules](../../modules/README.md).

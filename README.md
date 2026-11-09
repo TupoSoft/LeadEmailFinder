@@ -4,9 +4,9 @@ API and web application for email discovery and verification. The API runs on Ne
 and Vite. PostgreSQL stores application data, Redis handles queues and caches, and Garage provides S3-compatible
 object storage for uploaded files and results.
 
-The API and its internal modules live in `apps/api/src/`; root API commands delegate to that workspace. The web
-application and MCP server live in `apps/web/` and `apps/mcp-server/`, and `packages/api-client/` contains the browser
-API client and generated contract.
+The API lives in `apps/api/src/`, with business modules in `modules/` and shared libraries in `libs/`;
+root API commands delegate to that workspace. The web application and MCP server live in `apps/web/` and
+`apps/mcp-server/`, and `packages/api-client/` contains the browser API client and generated contract.
 
 ## Getting Started
 
@@ -154,4 +154,4 @@ Jobs can share pnpm downloads and Docker build-layer caches, but not workspaces 
 Frozen-lockfile installs and cache-miss builds remain required. Validation builds images without publishing them;
 this repository does not schedule application deployment.
 
-For ownership and dependency rules, see the [business-module guide](apps/api/src/libs/modules/README.md).
+For ownership and dependency rules, see the [business-module guide](apps/api/src/modules/README.md).
