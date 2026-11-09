@@ -106,7 +106,7 @@ Unit tests are beside the resolver and adapters in `src/application/` and `src/i
   to an owned disposable database ending in `_test`; API-key tests create/drop only their own schema.
 - `organization-directory.integration.spec.ts`: set `TEST_ORGANIZATION_DIRECTORY_POSTGRES_URL` to a disposable `_test`
   database; tests cover page boundaries, timestamp precision, concurrent insertion, and detail reads in a private schema.
-- Ledger/reservation races: [`credits`](../credits/README.md), via `corepack pnpm test:credits-postgres`.
+- Ledger/reservation races: [`credits`](../credits/README.md), against a disposable PostgreSQL test database.
 - Final-owner locking: [`organization-onboarding`](../organization-onboarding/README.md)'s membership concurrency test.
 
 Run the directory test with `corepack pnpm exec jest organization-directory.integration.spec.ts --runInBand`.

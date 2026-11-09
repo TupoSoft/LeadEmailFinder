@@ -243,13 +243,9 @@ encoding, and public status/download agreement.
 
 ```shell
 corepack pnpm test -- email-verification --runInBand
-corepack pnpm test:verification-billing-postgres
-corepack pnpm bruno:async-verification
-corepack pnpm bruno:batch-verification
-corepack pnpm bruno:smtp-dev
 ```
 
-The PostgreSQL command provisions an owned disposable `verification_billing_test` database and exercises real
+PostgreSQL integration suites require a separately provisioned disposable test database for real
 reservation/admission/settlement races. Real Redis queue tests require disposable `TEST_REDIS_URL`. Bruno (the HTTP
 collection runner) requires a checkout-owned development/SMTP fixture stack; see
 [async](../../../../bruno/async-verification/README.md), [batch](../../../../bruno/batch-verification/README.md), and

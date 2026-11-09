@@ -68,8 +68,8 @@ Disablement is idempotent (repeating it has no extra effect); deleting an absent
 `createdAt DESC, id DESC` order.
 
 The API-key schema replaces legacy OAuth machine credentials without a production migration. For incompatible
-disposable development data, use the guarded [reset](../../../../docker/README.md), synchronize with
-`TYPEORM_SYNCHRONIZE=true`, and seed again. Keep Keycloak human fixtures until browser-login cutover.
+disposable development data, recreate only the owned database and prepare identities and keys again.
+Keep Keycloak human identities until browser-login cutover.
 
 ## Configuration
 
@@ -82,5 +82,5 @@ and key generation. Identity's `api-key-credential-postgres.integration.spec.ts`
 `TEST_POSTGRES_URL` to verify uniqueness, audit rollback, uncached lookup, and mutation races.
 
 [`Bruno checks`](../../../../bruno/service-client-management/README.md) cover missing authentication and machine-key
-rejection; Bruno runs API request collections. Human-session success needs the live browser suite. Run the architecture,
-type, and OpenAPI checks with focused tests; substituted HTTP tests do not prove real database or login behavior.
+rejection; Bruno runs API request collections. Review dependency boundaries and run type checking and focused tests;
+substituted HTTP tests do not prove real database or login behavior.

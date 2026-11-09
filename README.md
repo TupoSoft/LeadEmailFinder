@@ -16,8 +16,8 @@ corepack pnpm install --frozen-lockfile
 docker compose -f docker/compose.yaml up -d --build
 ```
 
-Wait for API and web health checks before opening the product. Provision authentication and seed development data
-with the guarded reset below when starting from disposable data.
+Wait for API and web health checks before opening the product. Configure the Keycloak realm, application identities,
+and development data separately; starting Compose does not provision them.
 
 | Service             | Host address                          | Purpose                                            |
 | ------------------- | ------------------------------------- | -------------------------------------------------- |
@@ -32,43 +32,10 @@ with the guarded reset below when starting from disposable data.
 | MCP server          | <http://localhost:53002/health>       | AI-agent access through the Model Context Protocol |
 
 The API listens internally on `api:3000`; only the gateway publishes the browser API. See
-[`docker/README.md`](docker/README.md) for routing, fixture ownership, and recovery.
+[`docker/README.md`](docker/README.md) for routing and network recovery.
 
-## Resetting the Development Stack
-
-A reset **deletes disposable data**. It accepts only the checkout-owned `LEF` project at its default ports; it refuses
-foreign containers, alternate ports, and ambiguous volume ownership.
-
-```sh
-corepack pnpm dev:reset
-# Type LEF when prompted, or supply explicit confirmation:
-corepack pnpm dev:reset -- --confirm-project=LEF
-```
-
-The script recreates the stack, deletes `lef_postgres-data`, `lef_redis-data`, and `lef_keycloak-postgres-data`,
-reprovisions Keycloak, seeds fixtures, and ends with an authenticated API check. Garage objects and captured mail
-are also lost when their containers are recreated. Do not use this command to reset an isolated project.
-
-Seeded fixtures include:
-
-- Platform operator: `platform-operator@lef.test`, with the development-only password defined in
-  `scripts/keycloak/platform-operator.ts`.
-- Customer organization: `Acme Development Customer`, owner `owner@acme.lef.test`, and 1,000 initial credits.
-- Platform and customer API keys: ignored `.dev/auth/platform-api-key.json` and `.dev/auth/customer-api-key.json`,
-  with owner-only file permissions (`0600`). Machine callers send `Authorization: Bearer <apiKey>` directly;
-  there is no token exchange.
-
-Keycloak is the current browser identity provider. Privileged users require MFA (multi-factor authentication): a
-password plus a TOTP, a short-lived code generated from a shared enrollment secret. After reset, enroll the browser
-fixtures and run their checks:
-
-```sh
-corepack pnpm --filter ./apps/web browser-fixtures:bootstrap
-corepack pnpm --filter ./apps/web test:privileged
-```
-
-Keep `.dev/` and `docker/secrets/` private. Never commit real credentials, browser enrollment secrets, or raw
-request/response captures containing authentication data.
+Keep development credentials and `docker/secrets/` private. Never commit real credentials, browser enrollment
+secrets, or raw request/response captures containing authentication data.
 
 ## Development
 
@@ -105,32 +72,15 @@ on the server so browser JavaScript never stores provider tokens.
 The local public issuer is `http://localhost:58080/realms/lead-email-finder`; container-to-container calls use
 `http://keycloak:8080/realms/lead-email-finder`. Internal routing must not change the trusted public issuer.
 
-```sh
-corepack pnpm keycloak:smoke
-corepack pnpm test:bff-live
-corepack pnpm bruno:bff-sessions
-```
-
-Set `COMPOSE_PROJECT_NAME` for an explicitly provisioned isolated stack. Live launchers check checkout ownership;
-`test:bff-live` uses only the dedicated `bff_session_test` database.
-
 ### Browser API Contracts
 
 OpenAPI describes endpoint paths and request/response types; Swagger renders that description as an interactive
 page. The browser contract uses an explicit [operation allowlist](src/lead-email-finder-api/src/openapi/browser-document.ts).
 The full API remains available at `/docs`; `/docs-json` and `/docs-yaml` are disabled.
 
-After changing an included controller or DTO (data transfer object, the fields accepted or returned by an endpoint):
-
-```sh
-corepack pnpm openapi:export
-corepack pnpm openapi:generate
-corepack pnpm openapi:check
-```
-
-Commit the generated `packages/api-client/openapi/lead-email-finder.json` and `packages/api-client/src/schema.d.ts`
-with the source change. Do not edit them manually. Stage newly created artifacts before checking; untracked output
-also fails validation. Export/check runs without application services and detects stale files without rewriting them.
+The generated contract lives in `packages/api-client/openapi/lead-email-finder.json` and
+`packages/api-client/src/schema.d.ts`. Keep these artifacts consistent with included controllers and DTOs (data
+transfer objects) when changing the browser API.
 
 Browser calls use `createBrowserApiClient` with relative URLs and same-origin cookies. For mutations it adds
 `x-csrf-token` from the readable `lef_csrf_token` cookie. This protects against CSRF (cross-site request forgery),
@@ -162,7 +112,6 @@ provision the disposable base stack, then enable the local overlay:
 
 ```sh
 docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml up -d --build
-corepack pnpm bruno:smtp-dev
 ```
 
 The fixture uses internal DNS (domain-name lookup), a SOCKS5 proxy (a relay for outbound connections), and Mailpit
@@ -181,7 +130,6 @@ notification destination before removing the tunnel and its secrets.
 Use focused checks for the changed area:
 
 ```sh
-corepack pnpm architecture:check
 corepack pnpm test -- <focused-test-files> --runInBand
 corepack pnpm typecheck
 corepack pnpm --filter ./apps/web test:ci
@@ -191,30 +139,15 @@ corepack pnpm --filter ./apps/web build
 ```
 
 All browser suites use `apps/web/playwright.config.ts`. Existing package scripts set `LEF_PLAYWRIGHT_SUITE` for
-specialized runs; the default runs ordinary UI tests. Sensitive suites disable recording and use restricted reporters.
+specialized runs; the default runs ordinary UI tests.
 Unit tests, synthetic fixtures (controlled test data/services), and live-stack tests provide different evidence;
 report which actually ran.
 
-### Path-Aware Validation
+### Continuous Integration
 
-CI (continuous integration) selects checks from changed paths. Repository policy always runs; backend, web, contract,
-images, and browser jobs run when their inputs change. Unknown inputs or unavailable comparison history select all
-jobs. Ordinary documentation changes select policy checks only; web-local Markdown selects web checks too.
-The final `Validate / validate` check requires successful discovery and every selected check. An intentional no-op
-means a job was unselected, not that its tests passed.
-
-All jobs use independent GitHub-hosted Ubuntu 24.04 machines. They can share pnpm downloads and Docker build-layer
-caches, but not workspaces or running containers. Frozen-lockfile installs and cache-miss builds remain required.
-Validation builds images without publishing them; this repository does not schedule application deployment.
-
-```sh
-node scripts/ci/select-validation.mjs --paths-json '["apps/web/src/App.tsx"]'
-corepack pnpm test:ci-paths
-TMPDIR=/tmp TEMP=/tmp TMP=/tmp corepack pnpm test -- select-validation validate-workflow --runInBand
-```
-
-If stack reset fails in CI, `node scripts/testing/dev-stack-diagnostics.mjs` reads only the verified `lef` stack and
-emits a bounded summary without raw logs or credentials. Its diagnostic counters are clues, not confirmed causes;
-it neither repairs the stack nor turns a failed reset into success.
+CI runs the remaining backend, web, image, and browser checks on independent GitHub-hosted Ubuntu 24.04 machines.
+Jobs can share pnpm downloads and Docker build-layer caches, but not workspaces or running containers.
+Frozen-lockfile installs and cache-miss builds remain required. Validation builds images without publishing them;
+this repository does not schedule application deployment.
 
 For ownership and dependency rules, see the [business-module guide](src/libs/modules/README.md).

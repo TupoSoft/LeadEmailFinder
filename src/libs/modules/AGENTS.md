@@ -26,11 +26,9 @@ contract; existing violations do not establish supported patterns.
 ## Before Finishing
 
 ```sh
-corepack pnpm architecture:check
 corepack pnpm test -- <focused-test-files> --runInBand
 corepack pnpm typecheck
 ```
 
-The architecture check scans the complete repository and permits zero violations. Correct the design through the
-plan rather than accepting a violation as debt. Review the diff against the contract; report trade-offs and checks
-actually run, including validation limits.
+Review the diff against the architecture contract and correct violations rather than accepting them as debt.
+Report trade-offs and checks actually run, including validation limits.

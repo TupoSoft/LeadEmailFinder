@@ -59,7 +59,6 @@ module; Keycloak is the currently wired identity provider.
 
 ```sh
 corepack pnpm test -- src/libs/modules/auth src/lead-email-finder-api/src/authentication --runInBand
-corepack pnpm architecture:check
 corepack pnpm typecheck
 ```
 

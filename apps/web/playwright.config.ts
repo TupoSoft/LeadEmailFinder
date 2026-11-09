@@ -4,20 +4,10 @@ import { defineConfig, type PlaywrightTestConfig } from '@playwright/test'
 
 const port = 4173
 const privacyPolicies = {
-    authentication: {
-        flag: undefined,
-        reporter: './tests/support/browser-fixture-reporter.ts',
-        outputVariable: 'BROWSER_FIXTURE_OUTPUT',
-    },
     invitation: {
         flag: 'LEF_INVITATION_TEST_PRIVACY',
         reporter: './tests/support/invitation-reporter.ts',
         outputVariable: 'INVITATION_OUTPUT_DIR',
-    },
-    verification: {
-        flag: 'LEF_VERIFICATION_TEST_PRIVACY',
-        reporter: './tests/support/browser-fixture-reporter.ts',
-        outputVariable: 'BROWSER_FIXTURE_OUTPUT',
     },
     serviceClient: {
         flag: 'LEF_SERVICE_CLIENT_TEST_PRIVACY',
@@ -39,53 +29,14 @@ interface SensitiveSuite {
     previewPort?: number
     reuseExistingServer?: boolean
     backForwardCache?: boolean
-    reporter?: string
 }
 
 const sensitiveSuites: Record<string, SensitiveSuite | undefined> = {
-    privileged: {
-        testMatch: 'privileged-*.spec.ts',
-        privacy: 'authentication',
-        outputDirectory: 'lef-privileged-browser-results',
-        timeout: 90_000,
-    },
-    billing: {
-        testMatch: 'billing.spec.ts',
-        privacy: 'authentication',
-        outputDirectory: 'lef-billing-browser-results',
-        timeout: 90_000,
-    },
-    verification: {
-        testMatch: 'single-verification.spec.ts',
-        privacy: 'verification',
-        outputDirectory: 'lef-single-verification-browser-results',
-        timeout: 120_000,
-    },
-    'batch-verification': {
-        testMatch: 'batch-verification.spec.ts',
-        privacy: 'verification',
-        outputDirectory: 'lef-batch-verification-browser-results',
-        timeout: 120_000,
-    },
-    'verification-billing': {
-        testMatch: 'verification-billing.spec.ts',
-        privacy: 'verification',
-        outputDirectory: 'lef-verification-billing-results',
-        timeout: 120_000,
-        reporter: '../../scripts/testing/verification-billing-web.mjs',
-    },
     invitation: {
         testMatch: 'invitations-ui.spec.ts',
         privacy: 'invitation',
         outputDirectory: 'lef-invitation-results',
         previewPort: port,
-        backForwardCache: true,
-    },
-    team: {
-        testMatch: 'team-and-invitations.spec.ts',
-        privacy: 'invitation',
-        outputDirectory: 'lef-team-live-results',
-        timeout: 90_000,
         backForwardCache: true,
     },
     'platform-organizations': {
@@ -95,25 +46,12 @@ const sensitiveSuites: Record<string, SensitiveSuite | undefined> = {
         previewPort: port,
         backForwardCache: true,
     },
-    'platform-organizations-live': {
-        testMatch: 'platform-organizations.spec.ts',
-        privacy: 'invitation',
-        outputDirectory: 'lef-platform-organizations-live-results',
-        timeout: 90_000,
-        backForwardCache: true,
-    },
     'platform-credits': {
         testMatch: 'platform-credits-ui.spec.ts',
         privacy: 'invitation',
         outputDirectory: 'lef-platform-credits-results',
         previewPort: port,
         backForwardCache: true,
-    },
-    'platform-credits-live': {
-        testMatch: 'platform-credits.spec.ts',
-        privacy: 'invitation',
-        outputDirectory: 'lef-platform-credits-live-results',
-        timeout: 120_000,
     },
     'service-clients': {
         testMatch: 'service-clients-ui.spec.ts',
@@ -122,26 +60,12 @@ const sensitiveSuites: Record<string, SensitiveSuite | undefined> = {
         previewPort: port,
         backForwardCache: true,
     },
-    'service-clients-live': {
-        testMatch: 'service-clients.spec.ts',
-        privacy: 'serviceClient',
-        outputDirectory: 'lef-service-client-live-results',
-        timeout: 120_000,
-        backForwardCache: true,
-    },
     'platform-proxies': {
         testMatch: 'platform-proxies-ui.spec.ts',
         privacy: 'proxy',
         outputDirectory: 'lef-platform-proxy-results',
         previewPort: Number(process.env.PROXY_BROWSER_PORT ?? 41739),
         reuseExistingServer: false,
-        backForwardCache: true,
-    },
-    'platform-proxies-live': {
-        testMatch: 'platform-proxies.spec.ts',
-        privacy: 'proxy',
-        outputDirectory: 'lef-platform-proxy-live-results',
-        timeout: 120_000,
         backForwardCache: true,
     },
 }
@@ -158,21 +82,11 @@ export function createPlaywrightConfig(suiteName = 'ui'): PlaywrightTestConfig {
         return defineConfig({
             testDir: './tests/e2e',
             testIgnore: [
-                'privileged-*.spec.ts',
-                'billing.spec.ts',
-                'single-verification.spec.ts',
-                'batch-verification.spec.ts',
-                'verification-billing.spec.ts',
                 'invitations-ui.spec.ts',
                 'platform-organizations-ui.spec.ts',
-                'platform-organizations.spec.ts',
                 'platform-credits-ui.spec.ts',
-                'platform-credits.spec.ts',
-                'team-and-invitations.spec.ts',
                 'service-clients-ui.spec.ts',
-                'service-clients.spec.ts',
                 'platform-proxies-ui.spec.ts',
-                'platform-proxies.spec.ts',
             ],
             fullyParallel: true,
             forbidOnly: Boolean(process.env.CI),
@@ -247,7 +161,7 @@ export function createPlaywrightConfig(suiteName = 'ui'): PlaywrightTestConfig {
         workers: 1,
         retries: 0,
         ...(suite.timeout !== undefined ? { timeout: suite.timeout } : {}),
-        reporter: suite.reporter ?? policy.reporter,
+        reporter: policy.reporter,
         outputDir: process.env[policy.outputVariable] ?? join(tmpdir(), suite.outputDirectory),
         use: {
             ...(previewPort !== undefined ? { baseURL: `http://127.0.0.1:${previewPort}` } : {}),

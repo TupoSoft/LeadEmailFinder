@@ -4,25 +4,18 @@ Bruno runs API requests with assertions. SMTP (Simple Mail Transfer Protocol) is
 probes. This Docker-only fixture checks DNS lookup, proxy allocation, encrypted transport, verification evidence,
 and billing; it does not establish real-world deliverability.
 
-## Start and Run
+## Start
 
-For fresh **disposable** default data, confirm this checkout owns the stack before resetting it:
+Prepare a disposable base stack and a private platform API key before starting the overlay. It mounts
+`.dev/auth/platform-api-key.json` with owner-only permissions (`0600`); starting Compose does not create the key.
 
 ```shell
-corepack pnpm dev:reset -- --confirm-project=LEF
 docker compose -f docker/compose.yaml -f docker/compose.smtp-dev.yaml up -d --build
-corepack pnpm bruno:smtp-dev
 ```
 
-Reset deletes development data and seeds the private platform API key before the overlay mounts
-`.dev/auth/platform-api-key.json` with mode `0600` (owner-only read/write). Stop any active overlay before reset.
-To attach the overlay to an already provisioned stack, run only the Compose command. Older stacks may need
-[network recovery](../../docker/README.md#recover-an-older-smtp-network).
-
-The launcher verifies checkout/container ownership, loads the key without printing it, and requires all 47 requests
-and a nonzero passing test count. Missing, skipped, or failed execution fails validation. Set `COMPOSE_PROJECT_NAME`
-for a separately named stack. Public identity-provider URLs remain unchanged while collection traffic uses the
-Docker-internal API. The developer sandbox supplies the script APIs needed by the collection.
+Configure the collection credentials and organization through `environments/local.yml`. Requests use Docker-internal
+API and evidence-control addresses, so run them from the fixture network. The developer sandbox supplies the script
+APIs needed by the collection. Older stacks may need [network recovery](../../docker/README.md#recover-an-older-smtp-network).
 
 ## Evidence and Billing
 
@@ -41,7 +34,7 @@ Docker-internal API. The developer sandbox supplies the script APIs needed by th
   and one pending retry. Fixture scenarios return to the accepts-all baseline afterward.
 
 Cached evidence can bypass probing and charging. Credit-counting addresses must not already have conclusive results;
-reset between complete runs rather than rerunning against a long-lived database.
+use fresh disposable data for complete runs.
 
 ## Other Required Contracts
 
@@ -62,5 +55,4 @@ The one-shot `smtp-dev-dns-cache-reset` service clears Redis `DNS_CACHE:*` befor
 answers cannot override the fixture's CoreDNS resolver.
 
 The overlay adds its own network and leaves the base network unchanged. Never reset another checkout's stack or
-print API keys. Repeated credential seeding preserves an active key. Use ownership-checked resets for disposable
-fixture data; the collection does not guarantee retained job/result lifetimes.
+print API keys. Clean up only owned fixture data; the collection does not guarantee retained job/result lifetimes.

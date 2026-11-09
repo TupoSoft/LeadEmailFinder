@@ -17,33 +17,20 @@ docker compose -f docker/compose.yaml config --quiet
 docker compose -f docker/compose.yaml up -d --build --wait --wait-timeout 240
 ```
 
-Compose defaults to the watched `pnpm start`. Automated browser runs set `API_START_COMMAND='pnpm exec nest start'`
-so type checking and API-documentation generation finish before health succeeds. The web image contains built
-assets and a pinned, unprivileged Nginx runtime. Its loopback health endpoint on port 8081 checks static serving,
+Compose defaults to the watched `pnpm start`. Set `API_START_COMMAND='pnpm exec nest start'` when a single API
+startup is needed instead. The web image contains built assets and a pinned, unprivileged Nginx runtime. Its loopback health endpoint on port 8081 checks static serving,
 not API readiness; full browser validation requires both web and API health.
 
-For fresh **disposable** default data:
-
-```sh
-corepack pnpm dev:reset -- --confirm-project=LEF
-```
-
-Reset rebuilds/provisions the stack, seeds authentication fixtures, and checks public web and authenticated billing.
-It deletes development data only after checking checkout ownership, Compose configuration, labels, and allowlisted
-volumes. Stop overlays first and inspect the printed targets. Never reset another checkout or globally prune Docker.
-
-Machine callers use direct Bearer API keys. Provisioning writes ignored, owner-only (`0600`) files:
-`.dev/auth/platform-api-key.json` and `.dev/auth/customer-api-key.json`. Repeated seeding preserves active keys;
-reset removes them because the corresponding database rows are discarded. Reseed after incompatible schema changes.
-The SMTP verification overlay privately mounts the platform file. Human browser fixtures still use Keycloak until
-that authentication path is switched.
+Configure the Keycloak realm, application identities, and API keys separately before testing authenticated workflows.
+Machine callers use direct Bearer API keys. The SMTP verification overlay expects a private platform credential in
+`.dev/auth/platform-api-key.json` with owner-only permissions (`0600`); starting Compose does not create it.
 
 ## Authentication Mail
 
 `auth-mail` captures Better Auth transactional messages without relaying them. Containers send SMTP (the mail
 protocol) to `auth-mail:1025`; hosts use SMTP at `127.0.0.1:51025` and Mailpit's inbox at `http://127.0.0.1:8025`.
 Override `AUTH_MAIL_PUBLISHED_SMTP_PORT` or `AUTH_MAIL_HTTP_PORT` if needed. This service is independent of the SMTP
-verification overlay. Reset clears captured messages.
+verification overlay. Recreating its container clears captured messages.
 
 ## Recover an Older SMTP Network
 
@@ -104,24 +91,10 @@ queries, bodies, email addresses, and invitation/authentication URLs. Raw Nginx 
 status logs, process exits, and health checks expose failures. Backend upload limits still apply. The gateway allows
 one hour of idle response time for synchronous mailbox verification.
 
-## Verification and Recovery
-
-```sh
-corepack pnpm test:gateway
-corepack pnpm --filter @tuposoft/lead-email-finder-web exec playwright install chromium
-corepack pnpm test:web-live
-corepack pnpm bruno:bff-sessions
-```
-
-Build the tagged web image before `test:gateway`, which compares Vite/Nginx routing, forwarding, caching, headers,
-and sanitized logs in temporary containers. The live browser runner checks real login, expiry/replacement,
-competing callbacks, browser history, keyboard navigation, and logout across tabs. It verifies ownership/health,
-creates and deletes temporary ordinary members, expires only the test session, and suppresses credential-bearing
-artifacts. Bruno executes API request collections; its launcher requires every request and test to run.
+## Isolated Stacks
 
 For isolated stacks, set `COMPOSE_PROJECT_NAME` and free host ports through `WEB_PORT`, `KEYCLOAK_PORT`,
 `POSTGRES_PORT`, `REDIS_PORT`, `GARAGE_PORT`, `BULLBOARD_PORT`, and the authentication-mail overrides. Provision with
-matching public `KEYCLOAK_URL`, `KEYCLOAK_BFF_REDIRECT_URIS`, and `KEYCLOAK_BFF_POST_LOGOUT_REDIRECT_URIS`;
-host fixture scripts also need `API_URL` and `POSTGRES_URL`. BFF means backend for frontend, the server handling
-browser authentication. The reset command supports only default `LEF` and standard ports. Launchers discover owned
-endpoints and reject stale or foreign resources. Retry repaired builds/tests directly; stop only the verified project.
+matching public `APP_BASE_URL` and `OIDC_ISSUER_URL` values and matching Keycloak client redirect URLs;
+configure the application API and database addresses for that stack. BFF means backend for frontend, the server
+handling browser authentication. Retry repaired builds/tests directly; stop only the verified project.

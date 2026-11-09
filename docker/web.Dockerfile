@@ -13,8 +13,6 @@ COPY src/libs/common/src/checkout-redirect.ts src/libs/common/src/checkout-redir
 ARG PAYMENTS_PROVIDER=stub
 ARG PAYMENTS_CHECKOUT_URL=http://localhost:53000/billing/complete
 ARG PAYMENTS_CHECKOUT_ALLOWED_ORIGINS
-# Node test support is typechecked by the web build; only the pure development identity contract is needed.
-COPY scripts/keycloak/browser-fixture-identities.ts scripts/keycloak/browser-fixture-identities.ts
 RUN pnpm --filter @tuposoft/lead-email-finder-web build
 
 FROM nginxinc/nginx-unprivileged:1.30.0-alpine@sha256:808f7846d21a9c94cf53833e8807a00a33fd0b65cc47fb05b79efe366c2d201f

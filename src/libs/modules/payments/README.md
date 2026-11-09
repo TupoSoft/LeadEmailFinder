@@ -94,7 +94,7 @@ validation. Key suites are `api/http/billing-http.integration.spec.ts`,
 `application/payment-adjustment.handler.spec.ts`, `domain/payment-adjustment-accounting.spec.ts`, and the adapters
 under `src/infrastructure/`.
 
-`corepack pnpm test:credits-postgres` also runs `application/payment-event.handler.integration.spec.ts` against an
-owned disposable database. It covers concurrent/replayed events, interrupted processing, inverse ordering,
+`application/payment-event.handler.integration.spec.ts` requires `TEST_PAYMENT_WEBHOOK_POSTGRES_URL` pointing to
+an owned disposable test database. It covers concurrent/replayed events, interrupted processing, inverse ordering,
 shortfalls, and active reservation holds. [Bruno credit purchases](../../../../bruno/credit-purchases/README.md)
 exercises the signed stub checkout/adjustment flow; genuine Paddle behavior requires the sandbox runbook.

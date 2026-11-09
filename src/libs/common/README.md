@@ -22,4 +22,4 @@ SSE-KMS and development mappings. It is exported only through the testing-specif
 ## Validation
 
 Email-verification input/result adapter tests and API factory/module tests exercise the mappings.
-Type checking and `corepack pnpm architecture:check` verify dependency boundaries.
+Review imports against the [business-module dependency rules](../modules/README.md).

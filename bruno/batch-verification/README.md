@@ -1,16 +1,9 @@
 # Batch Verification Collection
 
-Bruno runs API requests with assertions. Run from the repository root against this checkout's provisioned,
-disposable stack and SMTP (mail-protocol) fixtures:
-
-```shell
-corepack pnpm bruno:batch-verification
-```
-
-The launcher verifies container ownership, loads private platform/customer API keys, and requires all 20 requests
-and 30 tests to pass. Missing, skipped, or empty results fail. It uses an exclusive fixture lock and restores the
-customer's original balance, SMTP scenario, and temporary CSV files after success or failure. Run verification
-suites sequentially; credentials, headers, and bodies are withheld from reports.
+This Bruno API-request collection requires a provisioned disposable stack with SMTP (mail-protocol) fixtures.
+Configure the credentials, organization, evidence-control address, and generated CSV inputs listed in
+`environments/local.yml`. Run sequentially with other verification collections and restore changed fixture data
+afterward.
 
 ## Required Behavior
 
@@ -36,5 +29,4 @@ satisfying that check.
 Runs create fresh jobs and use the existing cleanup policy. Reports retain no job IDs, filenames, CSV rows, or raw
 worker errors.
 
-Mixed cached, shared, and cooldown outcomes are outside this collection. Synthetic runner tests verify assertions
-and reporting; they do not prove live SMTP or database behavior. Record live results separately from those tests.
+Mixed cached, shared, and cooldown outcomes are outside this collection.

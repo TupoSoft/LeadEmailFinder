@@ -72,9 +72,8 @@ Compose limits that port to loopback (the same machine only); restrict access wh
 deployment or OAuth authorization server (token-based delegation service) is provisioned. Cloud clients need a
 reachable connector URL. Check `/health`, choose unused ports, and stop only owned processes.
 
-Development seed tooling stores the customer key in private `.dev/auth/customer-api-key.json` (mode 0600: owner-only
-read/write). After `loadDevelopmentStack` validates ownership, use `readApiKeyFixture` from
-`scripts/better-auth/api-key-files.mjs`. Never print/attach it or substitute the privileged platform fixture.
+Use an API key scoped to the customer organization and required tools. Keep it in private configuration; never
+print or attach it or substitute a privileged platform credential.
 
 ## Connecting Claude Desktop
 
@@ -91,5 +90,4 @@ fully after setup/rotation; verify a permitted read before spending credits.
 ## Validation
 
 `corepack pnpm test -- apps/mcp-server --runInBand` covers request gates, revocation, caller isolation, tools, and the
-pinned bridge. `corepack pnpm test:mcp-server-live` exercises the owned application stack, verification-only
-initialization, and old-key rejection after rotation/disablement/deletion. Unit tests do not establish live behavior.
+pinned bridge. Unit tests do not establish live behavior.
