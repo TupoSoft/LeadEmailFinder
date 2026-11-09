@@ -13,7 +13,6 @@
         "build:cloudflare": "tsc -b && LEF_CLOUDFLARE_BUILD=1 vite build --mode production",
         "preview": "vite preview",
         "preview:cloudflare": "LEF_CLOUDFLARE_BUILD=1 vite preview",
-        "test:cloudflare": "LEF_PLAYWRIGHT_SUITE=cloudflare playwright test",
         "test:e2e": "pnpm build && pnpm test:e2e:prebuilt",
         "test:e2e:prebuilt": "playwright test tests/e2e/public-entry.spec.ts tests/e2e/not-found.spec.ts tests/e2e/auth-shell.spec.ts tests/e2e/billing-ui.spec.ts tests/e2e/team-ui.spec.ts tests/e2e/verification-ui.spec.ts tests/e2e/batch-verification-ui.spec.ts tests/e2e/verification-billing-ui.spec.ts",
         "test:a11y": "pnpm build && pnpm test:a11y:prebuilt",
