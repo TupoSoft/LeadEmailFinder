@@ -79,7 +79,7 @@ The local public issuer is `http://localhost:58080/realms/lead-email-finder`; co
 ### Browser API Contracts
 
 OpenAPI describes endpoint paths and request/response types; Swagger renders that description as an interactive
-page. The browser contract uses an explicit [operation allowlist](apps/api/src/lead-email-finder-api/src/openapi/browser-document.ts).
+page. The browser contract uses an explicit [operation allowlist](apps/api/src/openapi/browser-document.ts).
 The full API remains available at `/docs`; `/docs-json` and `/docs-yaml` are disabled.
 
 The generated contract lives in `packages/api-client/openapi/lead-email-finder.json` and

@@ -2,7 +2,7 @@ import { INestApplication } from '@nestjs/common'
 import { APP_GUARD } from '@nestjs/core'
 import { Test } from '@nestjs/testing'
 import request from 'supertest'
-import { configureServiceClientResponseHeaders } from '../../../../../lead-email-finder-api/src/configure-service-client-response-headers'
+import { configureServiceClientResponseHeaders } from '../../../../../configure-service-client-response-headers'
 import {
     ActiveServiceCredentialReader,
     AUTH_IDENTITY_ISSUER,

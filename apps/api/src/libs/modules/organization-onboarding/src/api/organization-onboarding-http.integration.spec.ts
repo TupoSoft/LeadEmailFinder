@@ -6,7 +6,7 @@ import { AuthPrincipal, OrganizationMembershipDetailRecord } from '@tuposoft/lea
 import { AuthenticationService, AuthGuard, PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
 import { InvitationPreviewService } from '../application/invitation-preview.service'
 import { InvitationConsumedError, InvitationExpiredError, InvitationNotFoundError } from '../domain/organization-onboarding.errors'
-import { configureInvitationResponseHeaders } from '../../../../../lead-email-finder-api/src/configure-invitation-response-headers'
+import { configureInvitationResponseHeaders } from '../../../../../configure-invitation-response-headers'
 import { InvitationAcceptanceService } from '../application/invitation-acceptance.service'
 import { InvitationIssuanceService } from '../application/invitation-issuance.service'
 import { MembershipListingService } from '../application/membership-listing.service'

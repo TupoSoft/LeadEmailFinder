@@ -9,8 +9,8 @@ import {
     RolePermissionPolicy,
 } from '@tuposoft/lead-email-finder/modules/auth'
 import { AuthPrincipal } from '@tuposoft/lead-email-finder/modules/identity'
-import { configureApiSerialization } from '../../../../../lead-email-finder-api/src/configure-api-serialization'
-import { configureProxyResponseHeaders } from '../../../../../lead-email-finder-api/src/configure-proxy-response-headers'
+import { configureApiSerialization } from '../../../../../configure-api-serialization'
+import { configureProxyResponseHeaders } from '../../../../../configure-proxy-response-headers'
 import { ProxyRepository } from '../application/ports/proxy-repository'
 import { ProxyService } from '../application/proxy.service'
 import { ProxyLifecycle } from '../domain/proxy-lifecycle'

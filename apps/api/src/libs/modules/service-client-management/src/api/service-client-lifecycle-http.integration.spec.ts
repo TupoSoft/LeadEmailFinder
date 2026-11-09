@@ -18,8 +18,8 @@ import {
     SERVICE_CLIENT_GRANT_POLICY,
     ServiceClientGrantPolicy,
 } from '@tuposoft/lead-email-finder/modules/auth'
-import { configureApiSerialization } from '../../../../../lead-email-finder-api/src/configure-api-serialization'
-import { configureServiceClientResponseHeaders } from '../../../../../lead-email-finder-api/src/configure-service-client-response-headers'
+import { configureApiSerialization } from '../../../../../configure-api-serialization'
+import { configureServiceClientResponseHeaders } from '../../../../../configure-service-client-response-headers'
 import { generateApiKey } from '../infrastructure/api-key-generator'
 import { ServiceClientCreationService } from '../application/service-client-creation.service'
 import { ServiceClientDeletionService } from '../application/service-client-deletion.service'

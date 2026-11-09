@@ -1,20 +1,20 @@
 import { NestFactory } from '@nestjs/core'
-import { LeadEmailFinderApiModule } from './lead-email-finder-api/src/lead-email-finder-api.module'
+import { LeadEmailFinderApiModule } from './lead-email-finder-api.module'
 import { ConfigService } from '@nestjs/config'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { Logger } from 'pino-nestjs'
 import { NestExpressApplication } from '@nestjs/platform-express'
-import { configurePiiSafeRequestLogging } from './lead-email-finder-api/src/configure-pii-safe-request-logging'
-import { configureInvitationResponseHeaders } from './lead-email-finder-api/src/configure-invitation-response-headers'
-import { configureServiceClientResponseHeaders } from './lead-email-finder-api/src/configure-service-client-response-headers'
-import { configureProxyResponseHeaders } from './lead-email-finder-api/src/configure-proxy-response-headers'
-import { configureApiSerialization } from './lead-email-finder-api/src/configure-api-serialization'
+import { configurePiiSafeRequestLogging } from './configure-pii-safe-request-logging'
+import { configureInvitationResponseHeaders } from './configure-invitation-response-headers'
+import { configureServiceClientResponseHeaders } from './configure-service-client-response-headers'
+import { configureProxyResponseHeaders } from './configure-proxy-response-headers'
+import { configureApiSerialization } from './configure-api-serialization'
 import {
     buildApiDocuments,
     PluginMetadataFactory,
     registerApiDocumentation,
-} from './lead-email-finder-api/src/openapi/api-document'
+} from './openapi/api-document'
 
 async function bootstrap(): Promise<void> {
     const app = await NestFactory.create<NestExpressApplication>(LeadEmailFinderApiModule, { rawBody: true })
