@@ -219,6 +219,10 @@ jobs:
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:a11y:prebuilt
       - name: Test web visual baselines
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web test:visual:prebuilt
+      - name: Build Cloudflare web deployment
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web build:cloudflare
+      - name: Validate Cloudflare deployment without credentials
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-web exec cf deploy --prebuilt --mode production --dry-run
   browser:
     needs:
       - browser-ui

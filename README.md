@@ -123,7 +123,6 @@ report which actually ran.
 
 CI runs the remaining backend, web, image, and browser checks on independent GitHub-hosted Ubuntu 24.04 machines.
 Jobs can share pnpm downloads and Docker build-layer caches, but not workspaces or running containers.
-Frozen-lockfile installs and cache-miss builds remain required. Validation builds images without publishing them;
-this repository does not schedule application deployment.
+Frozen-lockfile installs and cache-miss builds remain required. Validation builds images without publishing them.
 
 For ownership and dependency rules, see the [business-module guide](apps/api/src/modules/README.md).
