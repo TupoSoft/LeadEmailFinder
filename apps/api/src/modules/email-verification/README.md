@@ -247,9 +247,7 @@ corepack pnpm test -- email-verification --runInBand
 
 PostgreSQL integration suites require a separately provisioned disposable test database for real
 reservation/admission/settlement races. Real Redis queue tests require disposable `TEST_REDIS_URL`. Bruno (the HTTP
-collection runner) requires a checkout-owned development/SMTP fixture stack; see
-[async](../../../../../bruno/async-verification/README.md), [batch](../../../../../bruno/batch-verification/README.md), and
-[SMTP](../../../../../bruno/smtp-dev/README.md) runbooks. Deterministic SMTP fixtures prove protocol/security/charging
-behavior, not real-world deliverability: plain `@lef.test` is catch-all/inconclusive, while `evidence.lef.test` supplies
-decisive scenarios. A scheduled temporary rejection can exceed the synchronous budget and return `202` while its
-reservation remains pending.
+collection runner) requires a separately provisioned disposable environment; see
+[async](../../../../../bruno/async-verification/README.md) and [batch](../../../../../bruno/batch-verification/README.md)
+runbooks. Unit/HTTP fixtures do not establish real-world deliverability. A scheduled temporary rejection can exceed
+the synchronous budget and return `202` while its reservation remains pending.

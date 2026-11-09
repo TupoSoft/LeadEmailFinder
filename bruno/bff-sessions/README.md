@@ -1,7 +1,7 @@
 # Browser Session Collection
 
 The BFF (backend for frontend) handles browser authentication and session cookies. This Bruno API-request collection
-requires a provisioned disposable Compose gateway. Configure its URLs and platform API key through
+requires a provisioned disposable API and web gateway. Configure its URLs and platform API key through
 `environments/local.yml` before running the requests.
 
 ## Required Contract

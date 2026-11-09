@@ -70,19 +70,4 @@ export default tseslint.config(
             '@typescript-eslint/no-unsafe-assignment': 'off',
         },
     },
-    {
-        name: 'repository-tooling',
-        files: ['docker/smtp-dev/*.mjs'],
-        languageOptions: {
-            sourceType: 'module',
-            parserOptions: {
-                project: false,
-                projectService: false,
-            },
-        },
-        rules: {
-            ...tseslint.configs.disableTypeChecked.rules,
-            '@typescript-eslint/explicit-function-return-type': 'off',
-        },
-    },
 )

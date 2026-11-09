@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config'
 import { SmtpConfiguration } from '../../../domain/email-verification-configuration'
 import { SmtpClientFactory } from './smtp-client.factory'
 
-const fixtureCaPath = resolve(__dirname, '../../../../../../../../../docker/smtp-dev/tls/ca.crt')
+const fixtureCaPath = resolve(__dirname, '../../../../../../../test/fixtures/smtp-tls/ca.crt')
 
 describe('SmtpClientFactory', () => {
     it('creates SMTP clients on port 25 by default without overriding Node trust', () => {

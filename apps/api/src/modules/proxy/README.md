@@ -69,6 +69,5 @@ mapping library. Redis stores lease bookkeeping separately.
 Tests under `src/` cover authorization, credential redaction, defaults, pagination, cache headers, selection, and
 Redis lease behavior. HTTP tests with substituted repositories do not establish live database behavior.
 
-[`bruno/proxy-registry`](../../../../../bruno/proxy-registry/README.md) exercises the API lifecycle;
-[`bruno/smtp-dev`](../../../../../bruno/smtp-dev/README.md) tests draining and real local SMTP allocation. Bruno is the
+[`bruno/proxy-registry`](../../../../../bruno/proxy-registry/README.md) exercises the API lifecycle. Bruno is the
 API-request runner used for those integration checks. Review dependency boundaries and run focused module tests after changes.

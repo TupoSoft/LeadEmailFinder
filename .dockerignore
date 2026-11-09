@@ -20,7 +20,6 @@
 **/*.dbmdl
 **/*.jfm
 **/charts
-**/docker-compose*
 **/Dockerfile*
 **/node_modules
 **/npm-debug.log
@@ -32,7 +31,6 @@ __mocks__
 docker
 !docker/
 docker/*
-!docker/garage-entrypoint.sh
 !docker/proxy-fleet/
 docker/proxy-fleet/*
 !docker/proxy-fleet/entrypoint.sh

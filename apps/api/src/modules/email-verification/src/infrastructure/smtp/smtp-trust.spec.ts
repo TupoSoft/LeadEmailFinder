@@ -12,7 +12,7 @@ jest.mock('node:tls', () => ({
 }))
 
 const getCACertificatesMock = jest.mocked(getCACertificates)
-const fixtureCaPath = resolve(__dirname, '../../../../../../../../docker/smtp-dev/tls/ca.crt')
+const fixtureCaPath = resolve(__dirname, '../../../../../../test/fixtures/smtp-tls/ca.crt')
 
 describe('loadSmtpTlsCa', () => {
     beforeEach(() => {

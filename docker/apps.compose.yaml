@@ -1,6 +1,0 @@
-name: LEF apps
-
-include:
-  - infra.yaml
-  - apps/lead-email-finder-api.compose.yaml
-  - apps/async-email-verification-worker.compose.yaml

@@ -9,7 +9,7 @@
         "start": "pnpm --filter @tuposoft/lead-email-finder-api start",
         "debug": "pnpm --filter @tuposoft/lead-email-finder-api debug",
         "test": "jest",
-        "test:ci": "jest --runInBand && node --test docker/smtp-dev/*.test.mjs",
+        "test:ci": "jest --runInBand",
         "lint": "eslint .",
         "typecheck": "tsc --noEmit -p tsconfig.json && pnpm --filter @tuposoft/lead-email-finder-api typecheck && tsc --noEmit -p apps/mcp-server/tsconfig.json",
         "prepare": "husky || true"
@@ -43,7 +43,6 @@
         "supertest": "^7.1.4",
         "ts-node": "^10.9.2",
         "typescript": "^5.9.2",
-        "typescript-eslint": "^8.41.0",
-        "yaml": "^2.9.0"
+        "typescript-eslint": "^8.41.0"
     }
 }

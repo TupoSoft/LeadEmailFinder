@@ -21,8 +21,6 @@ The local `starter` pack grants 100 credits for 500 USD minor units ($5). Each r
 in development history; signed adjustments restore the paid purchase's grant before completion. Clear history only
 in an owned disposable database.
 
-## Paddle Sandbox Setup
-
-Use this collection only with the stub provider. For the opt-in Paddle sandbox, see
-[the setup and cleanup procedure](../../docker/paddle-dev/README.md). Never commit API keys, webhook secrets, or
-customer transaction payloads.
+Use this collection only with the stub provider. Paddle requires separately provisioned sandbox checkout and webhook
+delivery; see the [payment configuration](../../apps/api/src/modules/payments/README.md#configuration).
+Never commit API keys, webhook secrets, or customer transaction payloads.
