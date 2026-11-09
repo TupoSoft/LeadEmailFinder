@@ -7,7 +7,7 @@ LIBRARIES="$3"
 CHANGED_APPS="[]"
 CHANGED_LIBS="[]"
 
-DEFAULT_LIBRARY_PREFIX=$(jq -r '.defaultLibraryPrefix' nest-cli.json)
+DEFAULT_LIBRARY_PREFIX=$(jq -r '.defaultLibraryPrefix' apps/api/nest-cli.json)
 
 for LIB in $(echo "$LIBRARIES" | jq -r '.[]'); do
   if [[ $(echo "$FILTER_OUTPUTS" | jq -r --arg lib "$LIB" '.[$lib + "-lib"]') == "true" ]]; then

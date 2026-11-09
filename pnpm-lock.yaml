@@ -7,6 +7,84 @@ settings:
 importers:
 
   .:
+    devDependencies:
+      '@eslint/js':
+        specifier: ^9.34.0
+        version: 9.34.0
+      '@faker-js/faker':
+        specifier: ^9.9.0
+        version: 9.9.0
+      '@swc/core':
+        specifier: ^1.13.5
+        version: 1.13.5
+      '@swc/jest':
+        specifier: ^0.2.39
+        version: 0.2.39(@swc/core@1.13.5)
+      '@types/jest':
+        specifier: ^30.0.0
+        version: 30.0.0
+      '@types/jest-when':
+        specifier: ^3.5.5
+        version: 3.5.5
+      '@types/node':
+        specifier: ^22.18.0
+        version: 22.18.0
+      '@types/supertest':
+        specifier: ^6.0.3
+        version: 6.0.3
+      '@usebruno/cli':
+        specifier: 4.1.0
+        version: 4.1.0
+      eslint:
+        specifier: ^9.34.0
+        version: 9.34.0
+      eslint-config-prettier:
+        specifier: ^10.1.8
+        version: 10.1.8(eslint@9.34.0)
+      eslint-import-resolver-typescript:
+        specifier: ^4.4.4
+        version: 4.4.4(eslint-plugin-import@2.32.0)(eslint@9.34.0)
+      eslint-plugin-import:
+        specifier: ^2.32.0
+        version: 2.32.0(@typescript-eslint/parser@8.41.0(eslint@9.34.0)(typescript@5.9.2))(eslint-import-resolver-typescript@4.4.4)(eslint@9.34.0)
+      globals:
+        specifier: ^16.3.0
+        version: 16.3.0
+      husky:
+        specifier: ^9.1.7
+        version: 9.1.7
+      jest:
+        specifier: ^30.1.1
+        version: 30.1.1(@types/node@22.18.0)(ts-node@10.9.2(@swc/core@1.13.5)(@types/node@22.18.0)(typescript@5.9.2))
+      jest-when:
+        specifier: ^3.7.0
+        version: 3.7.0(jest@30.1.1(@types/node@22.18.0)(ts-node@10.9.2(@swc/core@1.13.5)(@types/node@22.18.0)(typescript@5.9.2)))
+      openapi-typescript:
+        specifier: 7.13.0
+        version: 7.13.0(typescript@5.9.2)
+      pnpm:
+        specifier: 10.33.0
+        version: 10.33.0
+      prettier:
+        specifier: ^3.6.2
+        version: 3.6.2
+      supertest:
+        specifier: ^7.1.4
+        version: 7.1.4
+      ts-node:
+        specifier: ^10.9.2
+        version: 10.9.2(@swc/core@1.13.5)(@types/node@22.18.0)(typescript@5.9.2)
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.2
+      typescript-eslint:
+        specifier: ^8.41.0
+        version: 8.41.0(eslint@9.34.0)(typescript@5.9.2)
+      yaml:
+        specifier: ^2.9.0
+        version: 2.9.0
+
+  apps/api:
     dependencies:
       '@aws-sdk/client-s3':
         specifier: ^3.879.0
@@ -77,9 +155,6 @@ importers:
       ioredis:
         specifier: ^5.7.0
         version: 5.7.0
-      jest-when:
-        specifier: ^3.7.0
-        version: 3.7.0(jest@30.1.1(@types/node@22.18.0)(ts-node@10.9.2(@swc/core@1.13.5)(@types/node@22.18.0)(typescript@5.9.2)))
       jose:
         specifier: ^5.10.0
         version: 5.10.0
@@ -126,12 +201,6 @@ importers:
         specifier: ^4.1.5
         version: 4.1.5
     devDependencies:
-      '@eslint/js':
-        specifier: ^9.34.0
-        version: 9.34.0
-      '@faker-js/faker':
-        specifier: ^9.9.0
-        version: 9.9.0
       '@nestjs/cli':
         specifier: ^11.0.10
         version: 11.0.10(@swc/cli@0.7.8(@swc/core@1.13.5)(chokidar@4.0.3))(@swc/core@1.13.5)(@types/node@22.18.0)
@@ -147,18 +216,9 @@ importers:
       '@swc/core':
         specifier: ^1.13.5
         version: 1.13.5
-      '@swc/jest':
-        specifier: ^0.2.39
-        version: 0.2.39(@swc/core@1.13.5)
       '@types/express':
         specifier: ^5.0.3
         version: 5.0.3
-      '@types/jest':
-        specifier: ^30.0.0
-        version: 30.0.0
-      '@types/jest-when':
-        specifier: ^3.5.5
-        version: 3.5.5
       '@types/multer':
         specifier: ^2.0.0
         version: 2.0.0
@@ -174,45 +234,6 @@ importers:
       '@types/pg':
         specifier: ^8.20.0
         version: 8.20.0
-      '@types/supertest':
-        specifier: ^6.0.3
-        version: 6.0.3
-      '@usebruno/cli':
-        specifier: 4.1.0
-        version: 4.1.0
-      eslint:
-        specifier: ^9.34.0
-        version: 9.34.0
-      eslint-config-prettier:
-        specifier: ^10.1.8
-        version: 10.1.8(eslint@9.34.0)
-      eslint-import-resolver-typescript:
-        specifier: ^4.4.4
-        version: 4.4.4(eslint-plugin-import@2.32.0)(eslint@9.34.0)
-      eslint-plugin-import:
-        specifier: ^2.32.0
-        version: 2.32.0(@typescript-eslint/parser@8.41.0(eslint@9.34.0)(typescript@5.9.2))(eslint-import-resolver-typescript@4.4.4)(eslint@9.34.0)
-      globals:
-        specifier: ^16.3.0
-        version: 16.3.0
-      husky:
-        specifier: ^9.1.7
-        version: 9.1.7
-      jest:
-        specifier: ^30.1.1
-        version: 30.1.1(@types/node@22.18.0)(ts-node@10.9.2(@swc/core@1.13.5)(@types/node@22.18.0)(typescript@5.9.2))
-      openapi-typescript:
-        specifier: 7.13.0
-        version: 7.13.0(typescript@5.9.2)
-      pnpm:
-        specifier: 10.33.0
-        version: 10.33.0
-      prettier:
-        specifier: ^3.6.2
-        version: 3.6.2
-      supertest:
-        specifier: ^7.1.4
-        version: 7.1.4
       ts-node:
         specifier: ^10.9.2
         version: 10.9.2(@swc/core@1.13.5)(@types/node@22.18.0)(typescript@5.9.2)
@@ -222,9 +243,6 @@ importers:
       typescript:
         specifier: ^5.9.2
         version: 5.9.2
-      typescript-eslint:
-        specifier: ^8.41.0
-        version: 8.41.0(eslint@9.34.0)(typescript@5.9.2)
 
   apps/mcp-server:
     dependencies:

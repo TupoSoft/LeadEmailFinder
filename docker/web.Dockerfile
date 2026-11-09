@@ -9,7 +9,7 @@ RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm --filter @tuposoft/lead-email-finder-web... install --frozen-lockfile --ignore-scripts
 COPY apps/web apps/web
 COPY packages/api-client packages/api-client
-COPY src/libs/common/src/checkout-redirect.ts src/libs/common/src/checkout-redirect.ts
+COPY apps/api/src/libs/common/src/checkout-redirect.ts apps/api/src/libs/common/src/checkout-redirect.ts
 ARG PAYMENTS_PROVIDER=stub
 ARG PAYMENTS_CHECKOUT_URL=http://localhost:53000/billing/complete
 ARG PAYMENTS_CHECKOUT_ALLOWED_ORIGINS

@@ -46,7 +46,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-api-
       - name: Install dependencies
-        run: corepack pnpm --filter @tuposoft/lead-email-finder... --filter @tuposoft/lead-email-finder-api-client... --filter @tuposoft/lead-email-finder-mcp-server... install --frozen-lockfile
+        run: corepack pnpm --filter @tuposoft/lead-email-finder --filter @tuposoft/lead-email-finder-api... --filter @tuposoft/lead-email-finder-api-client... --filter @tuposoft/lead-email-finder-mcp-server... install --frozen-lockfile
       - name: Lint
         run: corepack pnpm lint
       - name: Type check

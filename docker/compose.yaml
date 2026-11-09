@@ -27,10 +27,17 @@ services:
     volumes:
       - "..:/app"
       - "/app/node_modules"
+      - "/app/apps/api/node_modules"
     develop:
       watch:
         - action: rebuild
           path: ../package.json
+        - action: rebuild
+          path: ../apps/api/package.json
+        - action: rebuild
+          path: ../pnpm-lock.yaml
+        - action: rebuild
+          path: ../pnpm-workspace.yaml
     dns:
       - 1.1.1.1
       - 8.8.8.8

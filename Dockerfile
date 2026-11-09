@@ -12,24 +12,17 @@ RUN corepack enable
 
 WORKDIR /app
 
-# Download dependencies as a separate step to take advantage of Docker's caching.
-# Leverage a cache mount to /root/.local/share/pnpm/store to speed up subsequent builds.
-# Leverage a bind mounts to package.json and pnpm-lock.yaml to avoid having to copy them into
-# into this layer.
-RUN --mount=type=bind,source=package.json,target=package.json \
-    --mount=type=bind,source=pnpm-lock.yaml,target=pnpm-lock.yaml \
-    --mount=type=bind,source=pnpm-workspace.yaml,target=pnpm-workspace.yaml \
-    --mount=type=cache,target=/root/.local/share/pnpm/store \
-    pnpm --frozen-lockfile i
+# Install the API dependencies and the shared build tools before copying sources.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/api/package.json apps/api/package.json
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    pnpm --filter @tuposoft/lead-email-finder --filter @tuposoft/lead-email-finder-api... install --frozen-lockfile
 
 # Copy the rest of the source files into the image.
 COPY . .
 
 # Generate metadata and build the application.
-RUN <<EOF
-set -e
-pnpm build
-EOF
+RUN pnpm --filter @tuposoft/lead-email-finder-api build
 
 FROM node:${NODE_VERSION}-alpine
 
@@ -53,16 +46,18 @@ RUN corepack enable
 WORKDIR /app
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/api/package.json apps/api/package.json
 
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
-    pnpm --frozen-lockfile -P i
+    pnpm --filter @tuposoft/lead-email-finder-api... install --frozen-lockfile --prod
 
-USER node
-
-COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/apps/api/dist ./apps/api/dist
 COPY --from=builder \
     /app/config/privacy/account-discovery-approvals.yaml \
     ./config/privacy/account-discovery-approvals.yaml
+
+WORKDIR /app/apps/api
+USER node
 
 EXPOSE 3000
 

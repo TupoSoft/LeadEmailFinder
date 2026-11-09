@@ -4,6 +4,10 @@ API and web application for email discovery and verification. The API runs on Ne
 and Vite. PostgreSQL stores application data, Redis handles queues and caches, and Garage provides S3-compatible
 object storage for uploaded files and results.
 
+The API and its internal modules live in `apps/api/src/`; root API commands delegate to that workspace. The web
+application and MCP server live in `apps/web/` and `apps/mcp-server/`, and `packages/api-client/` contains the browser
+API client and generated contract.
+
 ## Getting Started
 
 Install Docker with Compose v2. For commands outside containers, use Node 24 and the pnpm version pinned in
@@ -75,7 +79,7 @@ The local public issuer is `http://localhost:58080/realms/lead-email-finder`; co
 ### Browser API Contracts
 
 OpenAPI describes endpoint paths and request/response types; Swagger renders that description as an interactive
-page. The browser contract uses an explicit [operation allowlist](src/lead-email-finder-api/src/openapi/browser-document.ts).
+page. The browser contract uses an explicit [operation allowlist](apps/api/src/lead-email-finder-api/src/openapi/browser-document.ts).
 The full API remains available at `/docs`; `/docs-json` and `/docs-yaml` are disabled.
 
 The generated contract lives in `packages/api-client/openapi/lead-email-finder.json` and
@@ -150,4 +154,4 @@ Jobs can share pnpm downloads and Docker build-layer caches, but not workspaces 
 Frozen-lockfile installs and cache-miss builds remain required. Validation builds images without publishing them;
 this repository does not schedule application deployment.
 
-For ownership and dependency rules, see the [business-module guide](src/libs/modules/README.md).
+For ownership and dependency rules, see the [business-module guide](apps/api/src/libs/modules/README.md).

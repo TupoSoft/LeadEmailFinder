@@ -1,4 +1,4 @@
-import { validateCheckoutRedirect } from '../../../../../src/libs/common/src/checkout-redirect'
+import { validateCheckoutRedirect } from '../../../../api/src/libs/common/src/checkout-redirect'
 import { rememberCheckoutHint } from './checkout-return-hint'
 
 export class CheckoutUnavailableError extends Error {
