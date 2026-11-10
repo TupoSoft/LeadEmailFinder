@@ -34,7 +34,7 @@ describe('RedisSessionStore', () => {
             set: jest.fn().mockResolvedValue('OK'),
             del: jest.fn(),
             eval: jest.fn(),
-        } as unknown as jest.Mocked<Pick<Redis, 'get' | 'set' | 'del' | 'eval'>>
+        }
         encryptor = { encrypt: jest.fn(), decrypt: jest.fn() } as unknown as jest.Mocked<SessionEncryptor>
         configuration = {
             appBaseUrl: 'http://localhost:53000',

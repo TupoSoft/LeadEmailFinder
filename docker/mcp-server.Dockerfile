@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-ARG NODE_VERSION=24
+ARG NODE_VERSION=26
 
 FROM node:${NODE_VERSION}-alpine
 
@@ -15,8 +15,9 @@ RUN --mount=type=cache,target=/var/cache/apk \
     # jq is for the healthcheck \
     jq
 
-# Enable the pnpm version pinned by package.json.
-RUN corepack enable
+# Install Corepack to enable the pnpm version pinned by package.json.
+RUN npm install --global corepack@0.36.0 && \
+    corepack enable
 
 # The connector has no workspace-internal dependencies; only its own manifest is needed to resolve
 # the scoped install against the root lockfile.

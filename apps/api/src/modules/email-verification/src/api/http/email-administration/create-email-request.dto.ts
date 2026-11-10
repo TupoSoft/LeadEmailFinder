@@ -5,7 +5,7 @@ export class CreateEmailRequestDto {
     @IsString()
     email: string
 
-    @IsEnum(EmailPatternEnum as object)
+    @IsEnum(EmailPatternEnum)
     @IsOptional()
     format?: EmailPatternEnum
 

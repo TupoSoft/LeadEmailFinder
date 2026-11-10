@@ -1,9 +1,10 @@
 # syntax=docker/dockerfile:1
-ARG NODE_VERSION=24
+ARG NODE_VERSION=26
 
 FROM node:${NODE_VERSION}-alpine AS builder
 WORKDIR /app
-RUN corepack enable
+RUN npm install --global corepack@0.36.0 && \
+    corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/worker/package.json apps/worker/package.json
 COPY packages/verification-contracts/package.json packages/verification-contracts/package.json
@@ -17,7 +18,8 @@ RUN pnpm --filter @tuposoft/lead-email-finder-verification-contracts build && \
 
 FROM node:${NODE_VERSION}-alpine
 WORKDIR /app
-RUN corepack enable
+RUN npm install --global corepack@0.36.0 && \
+    corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/worker/package.json apps/worker/package.json
 COPY packages/verification-contracts/package.json packages/verification-contracts/package.json

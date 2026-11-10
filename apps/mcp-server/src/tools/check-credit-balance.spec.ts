@@ -41,7 +41,7 @@ describe('check_credit_balance over real HTTP and the real SDK transport', () =>
             if (url.startsWith('https://lef-api.example')) return Promise.resolve(billingResponse())
             return realFetch(input, init)
         })
-        global.fetch = fetchMock as unknown as typeof fetch
+        global.fetch = fetchMock
     })
 
     afterEach(() => {

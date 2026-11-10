@@ -76,7 +76,7 @@ describe('download_batch_results over real HTTP and the real SDK transport', () 
                 return Promise.resolve(jsonResponse(200, statusWith(resultsAvailable)))
             return realFetch(input, init)
         })
-        global.fetch = fetchMock as unknown as typeof fetch
+        global.fetch = fetchMock
     })
 
     afterEach(() => {
@@ -165,7 +165,7 @@ describe('download_batch_results over real HTTP and the real SDK transport', () 
                 return Promise.resolve(jsonResponse(404, { message: 'not found' }))
             return realFetch(input, init)
         })
-        global.fetch = fetchMock as unknown as typeof fetch
+        global.fetch = fetchMock
 
         const result = await callDownloadBatchResults({ id: batchId })
 

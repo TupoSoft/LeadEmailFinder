@@ -1,18 +1,11 @@
-import { ReadonlyVisitor } from '@nestjs/swagger/dist/plugin'
+import { ReadonlyVisitor } from '@nestjs/swagger/plugin'
 import { resolve } from 'node:path'
 import ts from 'typescript'
 
 describe('Proxy Swagger metadata', () => {
     it('omits credentials from response metadata while retaining the create and update request fields', () => {
         const file = resolve(__dirname, 'proxy.dto.ts')
-        const program = ts.createProgram([file], {
-            target: ts.ScriptTarget.ES2022,
-            module: ts.ModuleKind.CommonJS,
-            experimentalDecorators: true,
-            emitDecoratorMetadata: true,
-            strictNullChecks: true,
-            skipLibCheck: true,
-        })
+        const program = ReadonlyVisitor.createTsProgram(resolve(__dirname, '../../../../../tsconfig.build.json'))
         const source = program.getSourceFile(file)!
         const visitor = new ReadonlyVisitor({ pathToSource: __dirname })
 

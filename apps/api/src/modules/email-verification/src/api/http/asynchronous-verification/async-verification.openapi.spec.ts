@@ -1,7 +1,7 @@
 import { INestApplication } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import { DocumentBuilder, OpenAPIObject, SwaggerModule } from '@nestjs/swagger'
-import type { SchemaObject } from '@nestjs/swagger/dist/interfaces/open-api-spec.interface'
+import type { SchemaObject } from '@nestjs/swagger'
 import { PermissionsGuard } from '@tuposoft/lead-email-finder/modules/auth'
 import { ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN } from '../../../application/delivery/async/async-email-verification.service'
 import { VerificationRateLimitGuard } from '../verification-rate-limit.guard'

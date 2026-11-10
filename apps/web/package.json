@@ -1,6 +1,7 @@
 {
     "name": "@tuposoft/lead-email-finder-web",
     "version": "0.0.0",
+    "license": "Apache-2.0",
     "private": true,
     "type": "module",
     "scripts": {
@@ -29,7 +30,7 @@
         "@testing-library/jest-dom": "6.9.1",
         "@testing-library/react": "^16.3.0",
         "@testing-library/user-event": "^14.6.0",
-        "@types/node": "^22.18.0",
+        "@types/node": "^26.6.6",
         "@types/react": "^19.0.0",
         "@types/react-dom": "^19.0.0",
         "@vitejs/plugin-react-swc": "^4.0.0",

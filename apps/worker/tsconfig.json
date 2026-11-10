@@ -3,8 +3,8 @@
     "compilerOptions": {
         "rootDir": "src",
         "outDir": "dist",
-        "baseUrl": ".",
-        "incremental": false
+        "incremental": false,
+        "types": ["node", "jest"]
     },
     "include": ["src/**/*.ts"]
 }

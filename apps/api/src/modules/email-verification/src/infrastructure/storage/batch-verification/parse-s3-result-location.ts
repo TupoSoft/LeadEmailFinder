@@ -19,7 +19,7 @@ export function parseS3ResultLocation(value: string): { bucket: string; key: str
     // with '/', so stripping exactly one leading slash recovers the original key unchanged.
     const rawKey = url.pathname.replace(/^\//, '')
 
-    let key = ''
+    let key: string
     try {
         key = decodeURIComponent(rawKey)
     } catch {

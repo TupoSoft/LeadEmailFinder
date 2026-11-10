@@ -34,14 +34,14 @@ export function buildWorkerVerification(
     }
 
     const quality = classifyVerificationQuality(target, control)
-    const workerReason = Object.values(EmailVerificationReason).find(value => value === result.reason)
+    const workerReason = Object.values(EmailVerificationReason).find(value => String(value) === result.reason)
 
     if (!workerReason) {
         throw new Error('verification_reason_invalid')
     }
 
     const sources = result.sources.map(source => {
-        const known = Object.values(EmailVerificationSource).find(value => value === source)
+        const known = Object.values(EmailVerificationSource).find(value => String(value) === source)
 
         if (!known) {
             throw new Error('verification_source_invalid')

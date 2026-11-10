@@ -67,7 +67,7 @@ describe('TypeOrmInvitationStore', () => {
                 role: 'member',
                 status: 'pending',
                 expiresAt: new Date('2026-01-01T00:00:00Z'),
-            } as OrganizationInvitation)
+            })
 
             const result = await store.findByTokenHash('hash-1')
 

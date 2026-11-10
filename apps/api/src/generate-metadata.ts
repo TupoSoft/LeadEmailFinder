@@ -1,5 +1,5 @@
 import { PluginMetadataGenerator } from '@nestjs/cli/lib/compiler/plugins/plugin-metadata-generator'
-import { ReadonlyVisitor } from '@nestjs/swagger/dist/plugin'
+import { ReadonlyVisitor } from '@nestjs/swagger/plugin'
 import { readFileSync, rmSync } from 'node:fs'
 import { resolve } from 'node:path'
 

@@ -25,7 +25,7 @@ describe('connectViaSocks5Proxy', () => {
     })
 
     it('authenticates and sends a domain target without leaking the proxy response into the application stream', async () => {
-        const requests: Buffer[] = []
+        const requests: (Buffer | string)[] = []
         const applicationSocket = new Socket()
 
         server.once('connection', socket => {
@@ -63,7 +63,9 @@ describe('connectViaSocks5Proxy', () => {
         expect(connection).toBe(applicationSocket)
 
         expect(requests[0]).toEqual(Buffer.from([0x05, 0x01, 0x02]))
-        expect(requests[1]).toEqual(Buffer.from([0x01, 0x08, ...Buffer.from('smtp-dev'), 0x08, ...Buffer.from('smtp-dev')]))
+        expect(requests[1]).toEqual(
+            Buffer.from([0x01, 0x08, ...Buffer.from('smtp-dev'), 0x08, ...Buffer.from('smtp-dev')]),
+        )
         expect(requests[2]).toEqual(
             Buffer.from([0x05, 0x01, 0x00, 0x03, 0x0d, ...Buffer.from('smtp.lef.test'), 0x09, 0xdd]),
         )

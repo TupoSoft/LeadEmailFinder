@@ -9,7 +9,7 @@ type Row = { id: string; email: string; email_verified: boolean }
 function database(...results: Row[][]): jest.Mocked<NativeUserQueryable> {
     const query = jest.fn()
     for (const rows of results) query.mockResolvedValueOnce({ rows })
-    return { query } as unknown as jest.Mocked<NativeUserQueryable>
+    return { query }
 }
 
 const USER: Row = { id: '00000000-0000-4000-8000-000000000001', email: 'person@lef.test', email_verified: false }

@@ -9,7 +9,7 @@ describe('LefApiClient.getBillingSummary', () => {
 
     beforeEach(() => {
         fetchMock = jest.fn()
-        global.fetch = fetchMock as unknown as typeof fetch
+        global.fetch = fetchMock
     })
 
     it('sends the bearer token and returns the parsed balance on success', async () => {
@@ -91,7 +91,7 @@ describe('LefApiClient.submitAsyncVerification', () => {
 
     beforeEach(() => {
         fetchMock = jest.fn()
-        global.fetch = fetchMock as unknown as typeof fetch
+        global.fetch = fetchMock
     })
 
     it('sends the bearer token and email, returning the accepted id on 202', async () => {
@@ -119,7 +119,7 @@ describe('LefApiClient.getAsyncVerificationStatus', () => {
 
     beforeEach(() => {
         fetchMock = jest.fn()
-        global.fetch = fetchMock as unknown as typeof fetch
+        global.fetch = fetchMock
     })
 
     it.each([
@@ -175,7 +175,7 @@ describe('LefApiClient.uploadBatchCsv', () => {
 
     beforeEach(() => {
         fetchMock = jest.fn()
-        global.fetch = fetchMock as unknown as typeof fetch
+        global.fetch = fetchMock
     })
 
     it('sends the CSV as multipart form data and returns the accepted id on 202', async () => {
@@ -205,7 +205,7 @@ describe('LefApiClient.getBatchStatus', () => {
 
     beforeEach(() => {
         fetchMock = jest.fn()
-        global.fetch = fetchMock as unknown as typeof fetch
+        global.fetch = fetchMock
     })
 
     it('returns the full status object for an owned batch', async () => {
@@ -230,7 +230,7 @@ describe('LefApiClient.getBatchResultsCsv', () => {
 
     beforeEach(() => {
         fetchMock = jest.fn()
-        global.fetch = fetchMock as unknown as typeof fetch
+        global.fetch = fetchMock
     })
 
     it('returns the raw CSV text on success', async () => {

@@ -82,13 +82,9 @@ export class MailboxVerifier {
         ) {
             const discovered = await this.discovery.discover(command.email)
             const allowed = new Set(['microsoft_1', 'microsoft_2', 'microsoft_4', 'mimecast'])
-            sources = discovered.flatMap(value => {
-                if (!allowed.has(value.sourceName)) {
-                    return []
-                }
-
-                return [value.sourceName as CompletedVerificationResult['sources'][number]]
-            })
+            sources = discovered
+                .map(value => value.sourceName)
+                .filter((source): source is CompletedVerificationResult['sources'][number] => allowed.has(source))
 
             if (sources.length) {
                 exists = true

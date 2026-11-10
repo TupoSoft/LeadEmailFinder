@@ -56,7 +56,7 @@ describe('TypeOrmServiceCredentialWriter', () => {
             }),
         )
         managerMock.update.mockResolvedValue({ affected: 1, generatedMaps: [], raw: [] })
-        managerMock.findOneBy.mockResolvedValue(credentialFixture() as ServiceCredential)
+        managerMock.findOneBy.mockResolvedValue(credentialFixture())
         managerMock.delete.mockResolvedValue({ affected: 1, raw: [] })
         dataSourceMock = {
             transaction: jest.fn(async (callback: (manager: unknown) => Promise<unknown>) => callback(managerMock)),
@@ -128,7 +128,7 @@ describe('TypeOrmServiceCredentialWriter', () => {
     it('updates only the active credential timestamp and records rotation atomically', async () => {
         const credential = credentialFixture()
         const rotatedAt = new Date('2026-01-02T00:00:00.000Z')
-        managerMock.findOneBy.mockResolvedValueOnce({ ...credential, updatedAt: rotatedAt } as ServiceCredential)
+        managerMock.findOneBy.mockResolvedValueOnce({ ...credential, updatedAt: rotatedAt })
 
         const result = await writer.rotateWithAudit(credential, actorFixture(), {
             keyHash: 'b'.repeat(64),
@@ -157,7 +157,7 @@ describe('TypeOrmServiceCredentialWriter', () => {
 
     it('returns disabled when a concurrent disable wins the conditional rotation update', async () => {
         managerMock.update.mockResolvedValueOnce({ affected: 0, generatedMaps: [], raw: [] })
-        managerMock.findOneBy.mockResolvedValueOnce(credentialFixture({ status: 'disabled' }) as ServiceCredential)
+        managerMock.findOneBy.mockResolvedValueOnce(credentialFixture({ status: 'disabled' }))
 
         await expect(
             writer.rotateWithAudit(credentialFixture(), actorFixture(), {
@@ -187,7 +187,7 @@ describe('TypeOrmServiceCredentialWriter', () => {
 
     it('returns already-disabled transactionally without duplicating the audit entry', async () => {
         managerMock.update.mockResolvedValueOnce({ affected: 0, generatedMaps: [], raw: [] })
-        managerMock.findOneBy.mockResolvedValueOnce(credentialFixture({ status: 'disabled' }) as ServiceCredential)
+        managerMock.findOneBy.mockResolvedValueOnce(credentialFixture({ status: 'disabled' }))
 
         const result = await writer.disableWithAudit(credentialFixture({ status: 'disabled' }), actorFixture())
 

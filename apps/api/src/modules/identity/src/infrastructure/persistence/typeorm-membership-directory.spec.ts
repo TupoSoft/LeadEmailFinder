@@ -22,7 +22,7 @@ describe('TypeOrmMembershipDirectory', () => {
                 externalIdentity: { subject: 'kc-subject-1', email: 'member@example.test' },
                 role: 'member',
                 status: 'disabled',
-            } as OrganizationMembership,
+            },
         ])
 
         const result = await directory.listForOrganization('org-1')

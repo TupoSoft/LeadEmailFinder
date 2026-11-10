@@ -29,9 +29,11 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
-      - name: Enable Corepack
-        run: corepack enable
+          node-version: 26
+      - name: Install and enable Corepack
+        run: |
+          npm install --global corepack@0.36.0
+          corepack enable
       - name: Locate pnpm store
         id: pnpm-store
         run: |
@@ -42,9 +44,9 @@ jobs:
         continue-on-error: true
         with:
           path: ${{ steps.pnpm-store.outputs.path }}
-          key: ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-api-${{ hashFiles('pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node26-pnpm${{ steps.pnpm-store.outputs.version }}-api-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-api-
+            ${{ runner.os }}-${{ runner.arch }}-node26-pnpm${{ steps.pnpm-store.outputs.version }}-api-
       - name: Install dependencies
         run: corepack pnpm --filter @tuposoft/lead-email-finder --filter @tuposoft/lead-email-finder-api... --filter @tuposoft/lead-email-finder-worker... --filter @tuposoft/lead-email-finder-api-client... --filter @tuposoft/lead-email-finder-mcp-server... install --frozen-lockfile
       - name: Lint
@@ -56,19 +58,19 @@ jobs:
       - name: Test empty-database synchronization
         env:
           TEST_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/lef_identity_test
-        run: corepack pnpm test -- identity-schema.integration.spec.ts --runInBand
+        run: corepack pnpm test identity-schema.integration.spec.ts --runInBand
       - name: Test credit account debits against a real database
         env:
           TEST_CREDITS_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/lef_identity_test
-        run: corepack pnpm test -- credits.service.integration.spec.ts --runInBand
+        run: corepack pnpm test credits.service.integration.spec.ts --runInBand
       - name: Test payment adjustments against a real database
         env:
           TEST_PAYMENT_WEBHOOK_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/lef_identity_test
-        run: corepack pnpm test -- payment-event.handler.integration.spec.ts --runInBand
+        run: corepack pnpm test payment-event.handler.integration.spec.ts --runInBand
       - name: Test email-verification persistence stores against a real database
         env:
           TEST_EMAIL_VERIFICATION_PERSISTENCE_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/lef_identity_test
-        run: corepack pnpm test -- typeorm-stores-organization-isolation.integration.spec.ts --runInBand
+        run: corepack pnpm test typeorm-stores-organization-isolation.integration.spec.ts --runInBand
       - name: Test organization directory PostgreSQL page boundaries
         env:
           TEST_ORGANIZATION_DIRECTORY_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/lef_identity_test
@@ -83,9 +85,11 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
-      - name: Enable Corepack
-        run: corepack enable
+          node-version: 26
+      - name: Install and enable Corepack
+        run: |
+          npm install --global corepack@0.36.0
+          corepack enable
       - name: Locate pnpm store
         id: pnpm-store
         run: |
@@ -96,9 +100,9 @@ jobs:
         continue-on-error: true
         with:
           path: ${{ steps.pnpm-store.outputs.path }}
-          key: ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-web-${{ hashFiles('pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node26-pnpm${{ steps.pnpm-store.outputs.version }}-web-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-web-
+            ${{ runner.os }}-${{ runner.arch }}-node26-pnpm${{ steps.pnpm-store.outputs.version }}-web-
       - name: Install dependencies
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web... install --frozen-lockfile
       - name: Lint web application

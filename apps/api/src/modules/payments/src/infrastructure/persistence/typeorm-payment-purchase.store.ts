@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { DataSource, EntityManager } from 'typeorm'
 import { PurchaseRecord } from '../../domain/purchase-record'
-import { PurchaseStatus } from '../../domain/purchase-status'
 import {
     CreatePurchaseInput,
     PaidPurchase,
@@ -181,7 +180,7 @@ function toRecord(purchase: CreditPurchase): PurchaseRecord {
         provider: purchase.provider,
         providerReference: purchase.providerReference ?? null,
         providerTotalMinor: purchase.providerTotalMinor ?? null,
-        status: purchase.status as PurchaseStatus,
+        status: purchase.status,
         creditsGrantedAt: purchase.creditsGrantedAt ?? null,
         createdAt: purchase.createdAt,
         updatedAt: purchase.updatedAt,

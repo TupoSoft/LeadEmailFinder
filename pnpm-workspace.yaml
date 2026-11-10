@@ -1,10 +1,14 @@
 packages:
-  - 'apps/*'
-  - 'packages/*'
+    - 'apps/*'
+    - 'packages/*'
 
-onlyBuiltDependencies:
-  - '@nestjs/core'
-  - '@scarf/scarf'
-  - '@swc/core'
-  - msgpackr-extract
-  - unrs-resolver
+allowBuilds:
+    '@nestjs/core': true
+    '@parcel/watcher': false
+    '@scarf/scarf': true
+    '@swc/core': true
+    msgpackr-extract: true
+    pnpm: true
+    protobufjs: false
+    unrs-resolver: true
+    workerd: false

@@ -56,7 +56,7 @@ describe('TypeOrmCreditLedgerStore', () => {
                 organizationId,
                 balance: 10,
                 reserved: 0,
-            } as OrganizationCreditAccount)
+            })
             managerMock.existsBy.mockResolvedValue(false)
 
             await expect(store.debit(organizationId, 3, 'ref-1')).resolves.toBe('applied')
@@ -81,7 +81,7 @@ describe('TypeOrmCreditLedgerStore', () => {
                 organizationId,
                 balance: 1,
                 reserved: 0,
-            } as OrganizationCreditAccount)
+            })
             managerMock.existsBy.mockResolvedValue(false)
 
             await expect(store.debit(organizationId, 3, 'ref-1')).resolves.toBe('insufficient-balance')
@@ -95,7 +95,7 @@ describe('TypeOrmCreditLedgerStore', () => {
                 organizationId,
                 balance: 5,
                 reserved: 3,
-            } as OrganizationCreditAccount)
+            })
             managerMock.existsBy.mockResolvedValue(false)
 
             await expect(store.debit(organizationId, 3, 'ref-1')).resolves.toBe('insufficient-balance')
@@ -118,7 +118,7 @@ describe('TypeOrmCreditLedgerStore', () => {
                 organizationId,
                 balance: 10,
                 reserved: 0,
-            } as OrganizationCreditAccount)
+            })
             managerMock.existsBy.mockResolvedValue(true)
 
             await expect(store.debit(organizationId, 3, 'ref-1')).resolves.toBe('replayed')
@@ -132,7 +132,7 @@ describe('TypeOrmCreditLedgerStore', () => {
                 organizationId,
                 balance: 1,
                 reserved: 0,
-            } as OrganizationCreditAccount)
+            })
             managerMock.existsBy.mockResolvedValue(true)
 
             await expect(store.debit(organizationId, 3, 'ref-1')).resolves.toBe('replayed')
@@ -145,8 +145,8 @@ describe('TypeOrmCreditLedgerStore', () => {
             managerMock.findOneOrFail.mockResolvedValue({
                 organizationId: 'org-1',
                 balance: 0,
-            } as OrganizationCreditAccount)
-            managerMock.save.mockResolvedValue({ organizationId: 'org-1', balance: 5 } as OrganizationCreditAccount)
+            })
+            managerMock.save.mockResolvedValue({ organizationId: 'org-1', balance: 5 })
 
             const result = await store.credit('org-1', 5, 'ref-1')
 
@@ -185,7 +185,7 @@ describe('TypeOrmCreditLedgerStore', () => {
             managerMock.findOneOrFail.mockResolvedValue({
                 organizationId: 'org-1',
                 balance: 10,
-            } as OrganizationCreditAccount)
+            })
             managerMock.save.mockImplementation((_entity, account) =>
                 Promise.resolve(account as OrganizationCreditAccount),
             )
@@ -199,8 +199,8 @@ describe('TypeOrmCreditLedgerStore', () => {
             managerMock.findOneOrFail.mockResolvedValue({
                 organizationId: 'org-1',
                 balance: 10,
-            } as OrganizationCreditAccount)
-            managerMock.findOne.mockResolvedValue({ amount: 5 } as CreditGrant)
+            })
+            managerMock.findOne.mockResolvedValue({ amount: 5 })
 
             const result = await store.credit('org-1', amount, 'ref-1')
 
@@ -217,7 +217,7 @@ describe('TypeOrmCreditLedgerStore', () => {
             managerMock.findOneOrFail.mockResolvedValue({
                 organizationId: 'org-1',
                 balance: 12,
-            } as OrganizationCreditAccount)
+            })
             managerMock.findOne.mockResolvedValue(null)
             const failure = new QueryFailedError(
                 'INSERT INTO credit_grants',
@@ -237,7 +237,7 @@ describe('TypeOrmCreditLedgerStore', () => {
             managerMock.findOneOrFail.mockResolvedValue({
                 organizationId: 'org-1',
                 balance: 10,
-            } as OrganizationCreditAccount)
+            })
             managerMock.findOne.mockResolvedValue(null)
             const failure = new Error('database unavailable')
             managerMock.insert.mockRejectedValue(failure)
@@ -252,7 +252,7 @@ describe('TypeOrmCreditLedgerStore', () => {
     describe('debitUpTo', () => {
         it('clamps to the available balance and returns the amount persisted in the ledger', async () => {
             managerMock.findOne
-                .mockResolvedValueOnce({ organizationId: 'org-1', balance: 3 } as OrganizationCreditAccount)
+                .mockResolvedValueOnce({ organizationId: 'org-1', balance: 3 })
                 .mockResolvedValueOnce(null)
 
             await expect(store.debitUpTo('org-1', 10, 'adjustment-1')).resolves.toBe(3)
@@ -270,7 +270,7 @@ describe('TypeOrmCreditLedgerStore', () => {
 
         it('records and replays a zero applied debit without charging a later balance', async () => {
             managerMock.findOne
-                .mockResolvedValueOnce({ organizationId: 'org-1', balance: 0 } as OrganizationCreditAccount)
+                .mockResolvedValueOnce({ organizationId: 'org-1', balance: 0 })
                 .mockResolvedValueOnce(null)
 
             await expect(store.debitUpTo('org-1', 10, 'adjustment-1')).resolves.toBe(0)
@@ -282,8 +282,8 @@ describe('TypeOrmCreditLedgerStore', () => {
 
             jest.clearAllMocks()
             managerMock.findOne
-                .mockResolvedValueOnce({ organizationId: 'org-1', balance: 20 } as OrganizationCreditAccount)
-                .mockResolvedValueOnce({ amount: 0 } as CreditDebit)
+                .mockResolvedValueOnce({ organizationId: 'org-1', balance: 20 })
+                .mockResolvedValueOnce({ amount: 0 })
 
             await expect(store.debitUpTo('org-1', 10, 'adjustment-1')).resolves.toBe(0)
             expect(managerMock.save).not.toHaveBeenCalled()
@@ -292,8 +292,8 @@ describe('TypeOrmCreditLedgerStore', () => {
 
         it('returns the originally applied amount for a nonzero replay', async () => {
             managerMock.findOne
-                .mockResolvedValueOnce({ organizationId: 'org-1', balance: 50 } as OrganizationCreditAccount)
-                .mockResolvedValueOnce({ amount: 7 } as CreditDebit)
+                .mockResolvedValueOnce({ organizationId: 'org-1', balance: 50 })
+                .mockResolvedValueOnce({ amount: 7 })
 
             await expect(store.debitUpTo('org-1', 10, 'adjustment-1')).resolves.toBe(7)
 
@@ -307,7 +307,7 @@ describe('TypeOrmCreditLedgerStore', () => {
             managerMock.findOneOrFail.mockResolvedValue({
                 organizationId: 'org-1',
                 balance: 3,
-            } as OrganizationCreditAccount)
+            })
             managerMock.findOne.mockResolvedValue(null)
             managerMock.save.mockImplementation((_entity, account) =>
                 Promise.resolve(account as OrganizationCreditAccount),
@@ -330,8 +330,8 @@ describe('TypeOrmCreditLedgerStore', () => {
             managerMock.findOneOrFail.mockResolvedValue({
                 organizationId: 'org-1',
                 balance: 10,
-            } as OrganizationCreditAccount)
-            managerMock.findOne.mockResolvedValue({ amount: 7 } as CreditGrant)
+            })
+            managerMock.findOne.mockResolvedValue({ amount: 7 })
 
             await expect(store.creditOnce('org-1', 9, 'restore-1')).resolves.toBe(7)
 
@@ -346,7 +346,7 @@ describe('TypeOrmCreditLedgerStore', () => {
                 organizationId: 'org-1',
                 balance: 10,
                 reserved: 0,
-            } as OrganizationCreditAccount)
+            })
             managerMock.save.mockImplementation((_entity, account) =>
                 Promise.resolve(account as OrganizationCreditAccount),
             )
@@ -370,7 +370,7 @@ describe('TypeOrmCreditLedgerStore', () => {
                 organizationId: 'org-1',
                 balance: 10,
                 reserved: 4,
-            } as OrganizationCreditAccount)
+            })
 
             await expect(store.setBalance('org-1', 3)).resolves.toEqual({ kind: 'below-reserved' })
 
@@ -382,7 +382,7 @@ describe('TypeOrmCreditLedgerStore', () => {
                 organizationId: 'org-1',
                 balance: 10,
                 reserved: 4,
-            } as OrganizationCreditAccount)
+            })
             managerMock.save.mockImplementation((_entity, account) =>
                 Promise.resolve(account as OrganizationCreditAccount),
             )

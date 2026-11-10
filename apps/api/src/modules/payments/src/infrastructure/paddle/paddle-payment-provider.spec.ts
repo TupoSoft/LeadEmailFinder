@@ -3,7 +3,6 @@ import { Environment, Paddle } from '@paddle/paddle-node-sdk'
 import { CreditPack } from '../../domain/credit-pack'
 import { PaymentEvent } from '../../domain/payment-event'
 import { paymentProviderContract } from '../payment-provider.contract'
-import { PaddleClient } from './paddle-client'
 import { PaddleCheckoutUrlMissingError, PaddlePaymentProvider } from './paddle-payment-provider'
 
 const webhookSecret = 'paddle-contract-test-secret'
@@ -130,7 +129,7 @@ describe('PaddlePaymentProvider', () => {
             checkout: { url: 'https://sandbox-checkout.paddle.com/pay/txn_purchase' },
         })
         const provider = new PaddlePaymentProvider(
-            { transactions: { create }, webhooks: { unmarshal: jest.fn() } } as unknown as PaddleClient,
+            { transactions: { create }, webhooks: { unmarshal: jest.fn() } },
             webhookSecret,
         )
 
@@ -157,7 +156,7 @@ describe('PaddlePaymentProvider', () => {
             {
                 transactions: { create: jest.fn().mockResolvedValue({ id: 'txn_without_checkout', checkout: null }) },
                 webhooks: { unmarshal: jest.fn() },
-            } as unknown as PaddleClient,
+            },
             webhookSecret,
         )
 
@@ -195,7 +194,7 @@ describe('PaddlePaymentProvider', () => {
                         },
                     }),
                 },
-            } as unknown as PaddleClient,
+            },
             webhookSecret,
         )
 
@@ -224,7 +223,7 @@ describe('PaddlePaymentProvider', () => {
                         data: { id: 'transaction-id', customData: null, currencyCode, details },
                     }),
                 },
-            } as unknown as PaddleClient,
+            },
             webhookSecret,
         )
 
@@ -268,7 +267,7 @@ describe('PaddlePaymentProvider', () => {
                         },
                     }),
                 },
-            } as unknown as PaddleClient,
+            },
             webhookSecret,
         )
 
@@ -309,7 +308,7 @@ describe('PaddlePaymentProvider', () => {
                         },
                     }),
                 },
-            } as unknown as PaddleClient,
+            },
             webhookSecret,
         )
 
@@ -343,7 +342,7 @@ describe('PaddlePaymentProvider', () => {
                         },
                     }),
                 },
-            } as unknown as PaddleClient,
+            },
             webhookSecret,
         )
 
@@ -408,7 +407,7 @@ describe('PaddlePaymentProvider', () => {
                         },
                     }),
                 },
-            } as unknown as PaddleClient,
+            },
             webhookSecret,
         )
 

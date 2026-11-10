@@ -67,7 +67,7 @@ describe('TypeOrmPaymentPurchaseStore', () => {
                 creditsGrantedAt: null,
                 createdAt: new Date('2026-01-01T00:00:00Z'),
                 updatedAt: new Date('2026-01-01T00:00:00Z'),
-            } as CreditPurchase)
+            })
 
             const result = await store.create({
                 organizationId: 'org-1',

@@ -11,6 +11,8 @@ export default defineConfig({
                 test: {
                     name: 'application',
                     environment: 'jsdom',
+                    // Let jsdom provide Storage instead of Node's native globals.
+                    execArgv: ['--no-experimental-webstorage'],
                     include: ['src/**/*.test.{ts,tsx}'],
                     setupFiles: ['./src/test/setup.ts'],
                     restoreMocks: true,

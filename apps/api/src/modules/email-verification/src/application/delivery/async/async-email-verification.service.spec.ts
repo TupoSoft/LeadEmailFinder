@@ -1,6 +1,6 @@
 import { EmailVerificationReason, EmailVerificationSource } from '@tuposoft/lead-email-finder/common'
-import { AdmissionOutcome, VerificationAdmissionService } from '../../operations/verification-admission.service'
-import { ReadOutcome, VerificationOperationsReader } from '../../operations/verification-operations-reader'
+import { VerificationAdmissionService } from '../../operations/verification-admission.service'
+import { VerificationOperationsReader } from '../../operations/verification-operations-reader'
 import { VerificationExecutionDispatcher } from '../../ports/verification-execution-dispatcher'
 import { VerificationRequestRecord } from '../../ports/verification-request-store'
 import { AsyncEmailVerificationService } from './async-email-verification.service'
@@ -75,7 +75,7 @@ describe('AsyncEmailVerificationService', () => {
         })
 
         it('reports address-cooldown for a recent terminal inconclusive verdict', async () => {
-            admission.admit.mockResolvedValue({ kind: 'address-cooldown', retryAfterMs: 45_000 } as AdmissionOutcome)
+            admission.admit.mockResolvedValue({ kind: 'address-cooldown', retryAfterMs: 45_000 })
             await expect(service.verifyAsync(input)).resolves.toEqual({ kind: 'address-cooldown', retryAfterMs: 45_000 })
         })
 
@@ -117,7 +117,7 @@ describe('AsyncEmailVerificationService', () => {
         })
 
         it('maps a pending outcome to its public state', async () => {
-            operations.read.mockResolvedValue({ kind: 'pending', executionState: 'running' } as ReadOutcome)
+            operations.read.mockResolvedValue({ kind: 'pending', executionState: 'running' })
             await expect(service.getAsyncVerificationState('request-1', organizationId)).resolves.toEqual({
                 state: 'running',
             })
@@ -140,7 +140,7 @@ describe('AsyncEmailVerificationService', () => {
                     createdAt: new Date(),
                     evidenceObservedAt: new Date(),
                 },
-            } as ReadOutcome)
+            })
 
             const status = await service.getAsyncVerificationState('request-1', organizationId)
             expect(status.state).toBe('completed')

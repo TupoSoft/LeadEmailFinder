@@ -18,7 +18,7 @@ describe('RedisPendingLoginStateStore', () => {
     let store: RedisPendingLoginStateStore
 
     beforeEach(() => {
-        redis = { getdel: jest.fn(), set: jest.fn() } as unknown as jest.Mocked<Pick<Redis, 'getdel' | 'set'>>
+        redis = { getdel: jest.fn(), set: jest.fn() }
         store = new RedisPendingLoginStateStore(redis as unknown as Redis)
     })
 

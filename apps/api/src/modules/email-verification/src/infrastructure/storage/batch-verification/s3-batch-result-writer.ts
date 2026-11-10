@@ -217,7 +217,7 @@ export class S3BatchResultWriter implements BatchResultWriter {
         })
 
         const stringifier = stringify({
-            columns: OUTPUT_COLUMNS as unknown as { key: string; header: string }[],
+            columns: OUTPUT_COLUMNS,
             header: true,
             cast: {
                 string: (value, context) =>

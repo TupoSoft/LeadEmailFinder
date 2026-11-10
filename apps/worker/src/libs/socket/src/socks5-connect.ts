@@ -82,7 +82,7 @@ export async function connectViaSocks5Proxy(options: ConnectThroughProxyOptions)
     ok(connectStatus === STATUS_SUCCESS, new Error('SOCKS5 connection request failed'))
     ok(reserved === RESERVED, new Error('Invalid SOCKS5 connection response'))
 
-    await consumeBoundAddress(socket, responseAddressType as SocksAddressType, signal)
+    await consumeBoundAddress(socket, responseAddressType, signal)
     await readBytes(socket, PORT_BYTES, signal)
 
     return socket

@@ -31,7 +31,7 @@ describe('BrowserSessionMutationGuard', () => {
     beforeEach(() => {
         originGuard = { canActivate: jest.fn().mockReturnValue(true) }
         csrfGuard = { canActivate: jest.fn().mockReturnValue(true) }
-        guard = new BrowserSessionMutationGuard(originGuard as unknown as OriginGuard, csrfGuard as unknown as CsrfGuard)
+        guard = new BrowserSessionMutationGuard(originGuard as unknown as OriginGuard, csrfGuard)
     })
 
     it.each(['GET', 'HEAD', 'OPTIONS'])('allows a safe %s request without checking origin or CSRF', (method) => {

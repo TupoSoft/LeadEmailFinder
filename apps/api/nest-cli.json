@@ -7,6 +7,7 @@
         "builder": {
             "type": "swc",
             "options": {
+                "stripLeadingPaths": true,
                 "ignore": ["src/libs/common/src/testing/**"]
             }
         },
@@ -14,7 +15,7 @@
         "plugins": [
             {
                 "name": "@nestjs/swagger",
-                "options": { "introspectComments": true }
+                "options": { "introspectComments": true, "esmCompatible": true }
             }
         ]
     }

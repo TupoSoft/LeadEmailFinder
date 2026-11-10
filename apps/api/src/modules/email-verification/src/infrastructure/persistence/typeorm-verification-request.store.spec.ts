@@ -41,7 +41,7 @@ function entity(overrides: Partial<VerificationRequestEntity> = {}): Verificatio
         createdAt: new Date(),
         settledAt: null,
         ...overrides,
-    } as VerificationRequestEntity
+    }
 }
 
 describe('TypeOrmVerificationRequestStore', () => {
