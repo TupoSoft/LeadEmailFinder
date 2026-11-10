@@ -23,5 +23,4 @@ runtime:
                   reserved: heldReserved,
                   available: heldBalance - heldReserved,
                 });
-                expect(res.body.balance).to.not.equal(Number(bru.getVar('paidBalance')));
               });

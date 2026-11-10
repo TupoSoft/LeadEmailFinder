@@ -1,8 +1,7 @@
 import { createLogger, defineConfig, loadEnv } from 'vite'
 import type { Plugin, ProxyOptions, ViteDevServer } from 'vite'
 import react from '@vitejs/plugin-react-swc'
-import { isApiRequest, isInvitationDocument, STATIC_SECURITY_HEADERS } from './gateway-routes.ts'
-import { resolveCheckoutAllowedOrigins } from '../api/src/libs/common/src/checkout-redirect.ts'
+import { isApiRequest, STATIC_SECURITY_HEADERS } from './gateway-routes.ts'
 
 // Vite's style injection and React refresh need a nonce; this fixed value is for
 // local development only and is never included in the built Nginx document.
@@ -24,15 +23,6 @@ function staticHeaders(development: boolean): Plugin {
         server.middlewares.use((request, response, next) => {
             if (!isApiRequest(request.url ?? '/')) {
                 for (const [name, value] of Object.entries(headers)) response.setHeader(name, value)
-                if (isInvitationDocument(request.url ?? '/')) {
-                    // Vite sets no-cache while sending HTML after this middleware.
-                    // Keep the stricter policy through that final header write.
-                    const setHeader = response.setHeader.bind(response)
-                    response.setHeader = (name, value) =>
-                        setHeader(name, name.toLowerCase() === 'cache-control' ? 'no-store' : value)
-                    response.setHeader('Cache-Control', 'no-store')
-                    response.setHeader('Referrer-Policy', 'no-referrer')
-                }
             }
             next()
         })
@@ -47,11 +37,6 @@ export default defineConfig(async ({ command, isPreview, mode }) => {
     const development = command === 'serve' && !isPreview
     const environment = loadEnv(mode, process.cwd(), '')
     const target = environment.WEB_API_PROXY_TARGET || 'http://localhost:53000'
-    const checkoutOrigins = resolveCheckoutAllowedOrigins({
-        provider: environment.PAYMENTS_PROVIDER || 'stub',
-        checkoutUrl: environment.PAYMENTS_CHECKOUT_URL || 'http://localhost:53000/billing/complete',
-        allowedOrigins: environment.PAYMENTS_CHECKOUT_ALLOWED_ORIGINS,
-    })
     const logger = createLogger()
     const originalError = logger.error.bind(logger)
     logger.error = (message, options) => {
@@ -72,7 +57,6 @@ export default defineConfig(async ({ command, isPreview, mode }) => {
     } satisfies Record<string, ProxyOptions>
     return {
         plugins: [react(), ...(cloudflareBuild ? cloudflarePlugins : [staticHeaders(development)])],
-        define: { __PAYMENTS_CHECKOUT_ALLOWED_ORIGINS__: JSON.stringify(checkoutOrigins) },
         customLogger: logger,
         html: development ? { cspNonce: DEVELOPMENT_NONCE } : undefined,
         server: cloudflareBuild ? undefined : { proxy },

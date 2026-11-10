@@ -1,24 +1,52 @@
 info:
-  name: 14-unknown-api-routes-retain-json
-  type: http
-  seq: 14
+    name: 14-unknown-api-routes-retain-json
+    type: http
+    seq: 14
 
 http:
-  method: GET
-  url: "{{baseUrl}}/v1/not-real"
+    method: GET
+    url: '{{baseUrl}}/v1/not-real'
 
 runtime:
-  scripts:
-    - type: tests
-      code: |-
-        await test('keeps unknown API routes out of the product fallback', async function() {
-          expect(res.status).to.equal(404);
-          expect(res.headers['content-type']).to.include('application/json');
-          expect(res.body.statusCode).to.equal(404);
-          for (const path of ['/v1/email-verifications/not-real/child', '/verifyBatch/not-real/child', '/emails/not-real/child', '/credits/not-real/child']) {
-            const response = await fetch(`${bru.getEnvVar('baseUrl')}${path}`);
-            expect(response.status).to.equal(404);
-            expect(response.headers.get('content-type')).to.include('application/json');
-            expect((await response.json()).statusCode).to.equal(404);
-          }
-        });
+    scripts:
+        - type: tests
+          code: |-
+              await test('keeps unknown API routes out of the product fallback', async function() {
+                expect(res.status).to.equal(404);
+                expect(res.headers['content-type']).to.include('application/json');
+                expect(res.body.statusCode).to.equal(404);
+                const organization = '/v1/organizations/00000000-0000-4000-8000-000000000001';
+                const serviceClients = organization + '/service-clients';
+                const proxy = '/v1/proxies/00000000-0000-4000-8000-000000000001';
+                const removedOperations = [
+                  ['GET', '/v1/auth/api-key'],
+                  ['GET', '/v1/organizations'], ['POST', '/v1/organizations'],
+                  ['GET', organization], ['GET', organization + '/members'],
+                  ['PATCH', organization + '/members/member'], ['DELETE', organization + '/members/member'],
+                  ['POST', organization + '/invitations'],
+                  ['GET', '/v1/organizations/invitations/token'],
+                  ['POST', '/v1/organizations/invitations/token/accept'],
+                  ['GET', serviceClients], ['POST', serviceClients],
+                  ['POST', serviceClients + '/client/rotate'], ['POST', serviceClients + '/client/disable'],
+                  ['DELETE', serviceClients + '/client'],
+                  ['GET', '/credits/00000000-0000-4000-8000-000000000001'],
+                  ['POST', '/credits/00000000-0000-4000-8000-000000000001'],
+                  ['PUT', '/credits/00000000-0000-4000-8000-000000000001'],
+                  ['GET', '/v1/proxies'], ['POST', '/v1/proxies'], ['GET', '/v1/proxies/healthy'],
+                  ['GET', proxy], ['PATCH', proxy], ['DELETE', proxy], ['POST', proxy + '/blacklists'],
+                  ['GET', '/emails'], ['POST', '/emails'],
+                  ['GET', '/emails/person%40example.test'], ['PATCH', '/emails/person%40example.test'],
+                  ['POST', '/verifyBatch/csv'], ['GET', '/verifyBatch/job'], ['GET', '/verifyBatch/job/results'],
+                  ['GET', '/v1/billing/credit-packs'],
+                  ['GET', '/v1/credit-purchases'], ['POST', '/v1/credit-purchases'],
+                  ['POST', '/v1/payments/webhook'],
+                  ['GET', '/v1/email-verifications/not-real/child'],
+                  ['GET', '/verifyBatch/not-real/child'], ['GET', '/emails/not-real/child'], ['GET', '/credits/not-real/child'],
+                ];
+                for (const [method, path] of removedOperations) {
+                  const response = await fetch(`${bru.getEnvVar('baseUrl')}${path}`, { method });
+                  expect(response.status).to.equal(404);
+                  expect(response.headers.get('content-type')).to.include('application/json');
+                  expect((await response.json()).statusCode).to.equal(404);
+                }
+              });

@@ -1,12 +1,15 @@
 // Keep the corresponding Nginx locations in docker/web/default.conf identical.
-export const API_PREFIXES = ['/v1', '/verifyBatch', '/emails', '/credits', '/docs'] as const
+export const API_PREFIXES = ['/v1', '/docs'] as const
+
+// Reserve retired API namespaces so requests receive JSON 404s instead of the SPA document.
+const RETIRED_API_PREFIXES = ['/verifyBatch', '/emails', '/credits'] as const
 export const API_EXACT_PATHS = ['/health', '/openapi.json', '/docs-json', '/docs-yaml'] as const
 
 const escapePattern = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 // Ownership is checked after the same single decoding and slash normalization as Nginx.
 const API_PROXY_PATTERNS = [
-    `^(?:${API_PREFIXES.map(escapePattern).join('|')})(?:/|\\?|$)`,
+    `^(?:${[...API_PREFIXES, ...RETIRED_API_PREFIXES].map(escapePattern).join('|')})(?:/|\\?|$)`,
     `^(?:${API_EXACT_PATHS.map(escapePattern).join('|')})(?:\\?|$)`,
 ]
 
@@ -21,14 +24,6 @@ export function isApiRequest(target: string): boolean {
         const trailingSlash = /\/(?:\.|\.\.)?$/.test(pathname) && segments.length > 0 ? '/' : ''
         const normalized = `/${segments.join('/')}${trailingSlash}`
         return API_PROXY_PATTERNS.some(pattern => new RegExp(pattern).test(normalized))
-    } catch {
-        return false
-    }
-}
-
-export function isInvitationDocument(target: string): boolean {
-    try {
-        return /^\/accept-invitation(?:\/|$)/.test(decodeURIComponent(target.split('?')[0]))
     } catch {
         return false
     }

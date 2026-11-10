@@ -1,8 +1,0 @@
-name: local
-variables:
-  - name: baseUrl
-    value: http://localhost:53000
-  - name: oidcIssuerUrl
-    value: "{{process.env.OIDC_ISSUER_URL}}"
-  - name: platformApiKey
-    value: '{{process.env.PLATFORM_API_KEY}}'

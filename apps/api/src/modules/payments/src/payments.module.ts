@@ -5,7 +5,6 @@ import { resolveCheckoutAllowedOrigins } from '@tuposoft/lead-email-finder/commo
 import { CreditsModule, CreditsService } from '@tuposoft/lead-email-finder/modules/credits'
 import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
 import { CHECKOUT_REDIRECT_POLICY, CheckoutRedirectPolicy } from './application/ports/checkout-redirect-policy'
-import { BillingCreditPacksController } from './api/http/billing-credit-packs.controller'
 import { ConfiguredCheckoutRedirectPolicy } from './infrastructure/configured-checkout-redirect-policy'
 import { CreditPackCatalog } from './application/credit-pack-catalog'
 import { CreditPurchaseService } from './application/credit-purchase.service'
@@ -15,8 +14,6 @@ import { PAYMENT_ADJUSTMENT_STORE, PaymentAdjustmentStore } from './application/
 import { PAYMENT_EVENT_LOGGER, PaymentEventLogger } from './application/ports/payment-event-logger'
 import { PAYMENT_PROVIDER, PaymentProvider } from './application/ports/payment-provider'
 import { PAYMENT_PURCHASE_STORE, PaymentPurchaseStore } from './application/ports/payment-purchase-store'
-import { CreditPurchaseController } from './api/http/credit-purchase.controller'
-import { PaymentWebhookController } from './api/http/payment-webhook.controller'
 import { PaymentConfiguration, PaymentsProviderName } from './domain/payment-configuration'
 import { createPaddleProviderDependencies } from './infrastructure/paddle/paddle-client'
 import { PaddlePaymentProvider } from './infrastructure/paddle/paddle-payment-provider'
@@ -29,7 +26,6 @@ import { StubPaymentProvider } from './infrastructure/stub-payment-provider'
 
 @Module({
     imports: [ConfigModule, TypeOrmModule.forFeature([CreditPurchase, CreditPurchaseAdjustment]), CreditsModule],
-    controllers: [CreditPurchaseController, PaymentWebhookController, BillingCreditPacksController],
     providers: [
         RolePermissionPolicy,
         PermissionsGuard,

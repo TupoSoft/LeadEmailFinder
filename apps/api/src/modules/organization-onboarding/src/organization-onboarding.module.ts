@@ -20,7 +20,6 @@ import {
 } from '@tuposoft/lead-email-finder/modules/identity'
 import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
 import { InvitationPreviewService } from './application/invitation-preview.service'
-import { OrganizationsController } from './api/organizations.controller'
 import { InvitationAcceptanceService } from './application/invitation-acceptance.service'
 import { InvitationIssuanceService } from './application/invitation-issuance.service'
 import { MembershipListingService } from './application/membership-listing.service'
@@ -34,7 +33,6 @@ import { KeycloakOrganizationAdminClient } from './infrastructure/keycloak-organ
 
 @Module({
     imports: [ConfigModule, IdentityModule, KeycloakAdminHttpModule],
-    controllers: [OrganizationsController],
     providers: [
         RolePermissionPolicy,
         PermissionsGuard,

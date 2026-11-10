@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common'
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import { TypeOrmModule } from '@nestjs/typeorm'
 import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
-import { ProxyController } from './api/proxy.controller'
 import { ProxyAllocatorService } from './application/proxy-allocator.service'
 import { ProxyLeaseService } from './application/proxy-lease.service'
 import { ProxyRegistryService } from './application/proxy-registry.service'
@@ -29,7 +28,6 @@ const DEFAULT_LEASE_TTL_MS = 60_000
 
 @Module({
     imports: [ConfigModule, TypeOrmModule.forFeature([Proxy])],
-    controllers: [ProxyController],
     providers: [
         RolePermissionPolicy,
         PermissionsGuard,

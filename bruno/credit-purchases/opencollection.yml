@@ -1,17 +1,12 @@
 opencollection: 1.0.0
 
 info:
-    name: Credit Purchases
+    name: Billing Summary
 
 request:
     scripts:
         - type: before-request
           code: |-
-              bru.setVar('serviceClientToken', bru.getEnvVar('platformApiKey'));
-              if (
-                !req.getName().includes('unauthorized') &&
-                !req.getName().includes('active-hold') &&
-                !req.getUrl().includes('/v1/payments/webhook')
-              ) {
-                req.setHeader('Authorization', `Bearer ${bru.getVar('serviceClientToken')}`);
+              if (!req.getName().includes('unauthorized') && !req.getName().includes('active-hold')) {
+                req.setHeader('Authorization', `Bearer ${bru.getEnvVar('platformApiKey')}`);
               }

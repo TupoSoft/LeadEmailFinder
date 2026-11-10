@@ -33,13 +33,10 @@ function StartSignIn({ destination }: { destination: string }) {
 export function ProtectedApplication() {
     const { state, bootstrap, signOut, clearAccessDenied } = useAuth()
     const location = useLocation()
-    const destination = safeDestination(
-        recoveryPaths.has(location.pathname)
-            ? new URLSearchParams(location.search).get('destination')
-            : location.pathname === '/billing/complete'
-              ? '/app/billing'
-              : `${location.pathname}${location.search}${location.hash}`,
-    )
+    let destination = safeDestination(`${location.pathname}${location.search}${location.hash}`)
+    if (recoveryPaths.has(location.pathname)) {
+        destination = safeDestination(new URLSearchParams(location.search).get('destination'))
+    }
 
     useEffect(() => {
         void bootstrap()

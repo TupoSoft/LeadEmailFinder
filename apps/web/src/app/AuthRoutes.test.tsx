@@ -134,8 +134,17 @@ describe('application routes', () => {
         expect(screen.getByRole('link', { name: 'Back to workspace' })).toHaveAttribute('href', '/app')
     })
 
-    it('handles unknown protected paths with one main landmark and a working recovery', async () => {
-        renderRoute('/app/does-not-exist')
+    it.each([
+        '/app/does-not-exist',
+        '/app/team',
+        '/app/service-clients',
+        '/app/platform/organizations',
+        '/app/platform/proxies',
+        '/app/platform/organizations/organization-a/credits',
+        '/app/verifications/batches/new',
+        '/app/verifications/batches/batch-a',
+    ])('handles unavailable protected path %s with a working recovery', async path => {
+        renderRoute(path)
         expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
         expect(screen.getAllByRole('main')).toHaveLength(1)
         expect(screen.getByRole('link', { name: 'Back to workspace' })).toHaveAttribute('href', '/app')

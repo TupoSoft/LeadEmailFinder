@@ -5,7 +5,6 @@ import { createBrowserApiClient, type BrowserApiClientOptions } from '../../api/
 import { getCurrentAccount, type CurrentAccount } from '../../api/current-account'
 import { createApplicationQueryClient, retrySafeRead } from './query-client'
 import { authenticatedMutationOptions, type AuthenticationGeneration } from './authenticated-mutation'
-import { reconcileCreditAdjustments } from '../platform-credits/credit-adjustment-recovery'
 
 export const currentAccountQueryKey = ['auth', 'current-account'] as const
 export const sessionBoundaryChannelName = 'lef-session-boundary'
@@ -107,13 +106,6 @@ export class AuthSession {
     }
 
     private advance(state: AuthState): void {
-        if (
-            ['unauthenticated', 'session-expired', 'account-unavailable', 'signing-out', 'logout-uncertain'].includes(
-                state.status,
-            )
-        ) {
-            reconcileCreditAdjustments()
-        }
         this.generation += 1
         this.abortController.abort()
         this.abortController = new AbortController()
@@ -162,11 +154,7 @@ export class AuthSession {
                     } else if (error.category === 'account-unavailable') {
                         this.advance({ status: 'account-unavailable', error })
                         this.boundaryErrors.set(error, this.generation)
-                    } else if (
-                        error.category === 'access-denied' &&
-                        this.state.status === 'authenticated' &&
-                        !isLocallyHandledMutation(request.method, path)
-                    ) {
+                    } else if (error.category === 'access-denied' && this.state.status === 'authenticated') {
                         this.setState({ ...this.state, accessDenied: true })
                     }
                 }
@@ -236,7 +224,6 @@ export class AuthSession {
     }
 
     private installAccount(account: CurrentAccount): void {
-        reconcileCreditAdjustments(account.membership.id)
         if (!this.initialAccountAnnounced) {
             // A peer's delayed bootstrap cannot consume this document's own first-account announcement.
             this.initialAccountAnnounced = true
@@ -304,7 +291,6 @@ export class AuthSession {
             this.channel.onmessage = ({ data }) => {
                 if (!isBoundaryMessage(data)) return
                 if (data.reason === 'sign-out') {
-                    reconcileCreditAdjustments()
                     this.suppressedMembershipId ??= this.membershipId
                     this.suppressAccount = true
                 }
@@ -338,19 +324,4 @@ export class AuthSession {
             this.advance({ status: 'loading' })
         }
     }
-}
-
-// These operations present hierarchy/permission rejections in their local form
-// and refresh server state. Read authorization still uses the shared route.
-function isLocallyHandledMutation(method: string, path: string): boolean {
-    return (
-        (method === 'POST' && /^\/v1\/organizations\/[^/]+\/invitations$/.test(path)) ||
-        (method === 'PATCH' && /^\/v1\/organizations\/[^/]+\/members\/[^/]+$/.test(path)) ||
-        (method === 'DELETE' && /^\/v1\/organizations\/[^/]+\/members\/[^/]+$/.test(path)) ||
-        (method === 'POST' && path === '/v1/organizations') ||
-        ((method === 'POST' || method === 'PUT') && /^\/credits\/[^/]+$/.test(path)) ||
-        (method === 'POST' &&
-            /^\/v1\/organizations\/[^/]+\/service-clients(?:\/[^/]+\/(?:rotate|disable))?$/.test(path)) ||
-        (method === 'DELETE' && /^\/v1\/organizations\/[^/]+\/service-clients\/[^/]+$/.test(path))
-    )
 }
