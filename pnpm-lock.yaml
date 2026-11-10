@@ -353,6 +353,9 @@ importers:
       '@tuposoft/lead-email-finder-verification-contracts':
         specifier: workspace:*
         version: link:../../packages/verification-contracts
+      lru-cache:
+        specifier: ^11.5.2
+        version: 11.5.2
       tldts:
         specifier: ^7.0.12
         version: 7.0.12
