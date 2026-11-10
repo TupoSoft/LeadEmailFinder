@@ -56,6 +56,9 @@ export class VerificationExecutionEntity {
     @Column({ type: 'int', default: 0 })
     attemptGeneration: number
 
+    @Column({ type: 'uuid', nullable: true })
+    activeAttemptId: string | null
+
     @Column({ type: 'text', nullable: true })
     leaseOwnerId: string | null
 

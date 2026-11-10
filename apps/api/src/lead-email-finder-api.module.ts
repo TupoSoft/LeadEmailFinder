@@ -5,6 +5,7 @@ import { LoggerModule } from 'pino-nestjs'
 import { EmailVerificationModule } from '@tuposoft/lead-email-finder/modules/email-verification'
 import { BullModule } from '@nestjs/bullmq'
 import { Redis } from 'ioredis'
+import { ParseConnectionStringOptionsFactory, RedisModule } from '@tuposoft/lead-email-finder/redis'
 import { HealthModule } from './health'
 import { S3Module } from 'nestjs-s3'
 import { S3ModuleOptionsFactoryImpl } from './s3-module-options-factory-impl'
@@ -27,6 +28,10 @@ import { createPiiSafePinoHttpOptions } from './pii-safe-logger-options'
             validate: config => validate(EnvironmentVariablesDto, normalizeEnvironmentConfiguration(config)),
         }),
         CustomerObjectWriteSecurityModule,
+        RedisModule.forRootAsync({
+            imports: [ConfigModule],
+            useClass: ParseConnectionStringOptionsFactory,
+        }),
         TypeOrmModule.forRootAsync({
             imports: [ConfigModule],
             useClass: PostgresModuleOptionsFactoryImpl,

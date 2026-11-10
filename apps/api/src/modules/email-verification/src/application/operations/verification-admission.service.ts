@@ -3,7 +3,11 @@ import { CreditReservationService, InsufficientCreditsException } from '@tuposof
 import { VerificationClock } from '../ports/verification-clock'
 import { VerificationCooldownReader } from '../ports/verification-cooldown-reader'
 import { VerificationResultCacheReader } from '../ports/verification-result-cache-reader'
-import { VerificationDeliveryMode, VerificationRequestRecord, VerificationRequestStore } from '../ports/verification-request-store'
+import {
+    VerificationDeliveryMode,
+    VerificationRequestRecord,
+    VerificationRequestStore,
+} from '../ports/verification-request-store'
 import { VerificationExecutionStore } from '../ports/verification-execution-store'
 import { checkVerificationIdempotencyKeyAge } from '../verification-idempotency-key'
 import { isCachedResultUsable } from '../verification-result-cache'
@@ -68,7 +72,9 @@ export class VerificationAdmissionService {
         const cooldown = await this.cooldownReader.findLatestOutcome(input.organizationId, normalizedAddress)
         if (cooldown && cooldown.verificationQuality === 'inconclusive') {
             const retryAfterMs = cooldown.createdAt.getTime() + this.addressCooldownMs - now.getTime()
-            if (retryAfterMs > 0) return { kind: 'address-cooldown', retryAfterMs }
+            if (retryAfterMs > 0) {
+                return { kind: 'address-cooldown', retryAfterMs }
+            }
         }
 
         const requestId = randomUUID()
@@ -112,7 +118,9 @@ export class VerificationAdmissionService {
             billingState: 'settled',
             finalReason: 'cached',
         })
-        if (outcome.kind === 'key-conflict') return { kind: 'conflict', reason: 'key-mismatch' }
+        if (outcome.kind === 'key-conflict') {
+            return { kind: 'conflict', reason: 'key-mismatch' }
+        }
         return { kind: 'cached', requestId: outcome.record.requestId, resultId }
     }
 
@@ -137,7 +145,9 @@ export class VerificationAdmissionService {
             billingState: 'pending',
             finalReason: null,
         })
-        if (outcome.kind === 'key-conflict') return { kind: 'conflict', reason: 'key-mismatch' }
+        if (outcome.kind === 'key-conflict') {
+            return { kind: 'conflict', reason: 'key-mismatch' }
+        }
 
         if (execution.state === 'awaiting_retry' && execution.retryAt !== null) {
             const retryAfterMs = Math.max(0, execution.retryAt.getTime() - now.getTime())
@@ -156,7 +166,9 @@ export class VerificationAdmissionService {
         try {
             await this.credits.reserve(input.organizationId, { operationId: executionId, amount: RESERVATION_AMOUNT })
         } catch (error) {
-            if (!(error instanceof InsufficientCreditsException)) throw error
+            if (!(error instanceof InsufficientCreditsException)) {
+                throw error
+            }
 
             await this.executions.cancelFundingFailure(executionId, input.organizationId)
             await this.credits.closeAdmissionMany(input.organizationId, [
@@ -175,11 +187,12 @@ export class VerificationAdmissionService {
                 billingState: 'settled',
                 finalReason: 'failed',
             })
-            if (outcome.kind === 'key-conflict') return { kind: 'conflict', reason: 'key-mismatch' }
+            if (outcome.kind === 'key-conflict') {
+                return { kind: 'conflict', reason: 'key-mismatch' }
+            }
             return { kind: 'insufficient-funds', requestId: outcome.record.requestId }
         }
 
-        await this.executions.markQueued(executionId, input.organizationId)
         const outcome = await this.requests.insert({
             requestId,
             organizationId: input.organizationId,
@@ -193,7 +206,13 @@ export class VerificationAdmissionService {
             billingState: 'pending',
             finalReason: null,
         })
-        if (outcome.kind === 'key-conflict') return { kind: 'conflict', reason: 'key-mismatch' }
+        if (outcome.kind === 'key-conflict') {
+            await this.executions.cancelFundingFailure(executionId, input.organizationId)
+            await this.credits.release(input.organizationId, executionId)
+            return { kind: 'conflict', reason: 'key-mismatch' }
+        }
+        // The payer must exist before a command can leave the outbox: a fast worker can finish immediately.
+        await this.executions.markQueued(executionId, input.organizationId)
         return { kind: 'funded', requestId: outcome.record.requestId, executionId }
     }
 

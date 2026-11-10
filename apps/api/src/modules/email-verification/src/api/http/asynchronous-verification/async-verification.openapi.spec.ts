@@ -31,10 +31,12 @@ describe('asynchronous verification OpenAPI contract', () => {
     })
 
     it('describes all five states as disjoint required response variants with safe examples', () => {
-        const status = document.paths['/verifyAsync/{id}'].get!
+        const status = document.paths['/v1/email-verifications/{id}'].get!
         expect(status.operationId).toBe('AsyncEmailVerificationController_getAsyncVerificationState')
         const response = status.responses['200']!
-        if ('$ref' in response) throw new Error('expected inline response')
+        if ('$ref' in response) {
+            throw new Error('expected inline response')
+        }
         const content = response.content!['application/json']
         const schema = content.schema as SchemaObject
         expect(schema.discriminator?.propertyName).toBe('state')
@@ -42,7 +44,9 @@ describe('asynchronous verification OpenAPI contract', () => {
         expect(variants).toHaveLength(5)
         for (const [index, state] of ['queued', 'running', 'completed', 'failed', 'unavailable'].entries()) {
             const variant = variants[index]
-            if (!('$ref' in variant)) throw new Error('expected named state schema')
+            if (!('$ref' in variant)) {
+                throw new Error('expected named state schema')
+            }
             const name = variant.$ref.split('/').at(-1)!
             const component = document.components!.schemas![name] as SchemaObject
             expect(component.properties!.state).toMatchObject({ enum: [state] })
@@ -94,19 +98,10 @@ describe('asynchronous verification OpenAPI contract', () => {
     })
 
     it('documents the unchanged request, accepted ID, authorization, credit, and concealed lookup errors', () => {
-        const create = document.paths['/verifyAsync'].post!
+        const create = document.paths['/v1/email-verifications'].post!
         expect(create.operationId).toBe('AsyncEmailVerificationController_verifyAsync')
-        expect(Object.keys(create.responses).sort()).toEqual([
-            '202',
-            '400',
-            '401',
-            '402',
-            '403',
-            '409',
-            '410',
-            '429',
-        ])
-        expect(Object.keys(document.paths['/verifyAsync/{id}'].get!.responses).sort()).toEqual([
+        expect(Object.keys(create.responses).sort()).toEqual(['202', '400', '401', '402', '403', '409', '410', '429'])
+        expect(Object.keys(document.paths['/v1/email-verifications/{id}'].get!.responses).sort()).toEqual([
             '200',
             '400',
             '401',
@@ -122,6 +117,9 @@ describe('asynchronous verification OpenAPI contract', () => {
             properties: { id: { type: 'string', format: 'uuid' } },
         })
         expect(create.security).toEqual([{ lef_session: [], 'x-csrf-token': [] }, { oidc: [] }])
-        expect(document.paths['/verifyAsync/{id}'].get!.security).toEqual([{ lef_session: [] }, { oidc: [] }])
+        expect(document.paths['/v1/email-verifications/{id}'].get!.security).toEqual([
+            { lef_session: [] },
+            { oidc: [] },
+        ])
     })
 })

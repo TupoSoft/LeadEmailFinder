@@ -19,9 +19,7 @@ export interface BillingSummary {
     readonly available: number
 }
 
-/** Matches `EmailVerificationResponseDto` (`apps/api/src/modules/email-verification/src/api/email-verification-response.dto.ts`)
- * as actually serialized over HTTP -- `createdAt` is `toClassOnly` and never appears on the wire, and `operation`
- * is only ever populated on the synchronous route's completed (`201`) response, never on `GET /verifications/:id`. */
+/** Result fields included in a completed email-verification resource. */
 export interface EmailVerificationResult {
     readonly id: string
     readonly email: string
@@ -55,15 +53,19 @@ export interface VerificationOperationMetadata {
     readonly billing: VerificationOperationBilling
 }
 
-export type VerifySyncOutcome =
-    | { readonly kind: 'completed'; readonly result: EmailVerificationResult & { readonly operation: VerificationOperationMetadata } }
-    | { readonly kind: 'accepted'; readonly id: string }
-
 export type AsyncVerificationState =
     | { readonly state: 'queued' }
     | { readonly state: 'running' }
-    | { readonly state: 'completed'; readonly result: EmailVerificationResult; readonly operation?: VerificationOperationMetadata }
-    | { readonly state: 'failed'; readonly failureCode: 'verification_failed'; readonly operation?: VerificationOperationMetadata }
+    | {
+          readonly state: 'completed'
+          readonly result: EmailVerificationResult
+          readonly operation?: VerificationOperationMetadata
+      }
+    | {
+          readonly state: 'failed'
+          readonly failureCode: 'verification_failed'
+          readonly operation?: VerificationOperationMetadata
+      }
     | { readonly state: 'unavailable' }
 
 export type BatchJobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'unavailable'
@@ -113,42 +115,24 @@ export class LefApiClient {
     ) {}
 
     async getBillingSummary(): Promise<BillingSummary> {
-        return this.parseOrThrow<BillingSummary>(await this.request('/v1/billing/summary'))
-    }
+        const response = await this.request('/v1/billing/summary')
 
-    /** The API admits and drives the verification inline up to its own bounded budget. `202` (rather than a
-     * non-2xx status) signals the budget was exhausted and the caller must poll `getAsyncVerificationStatus`
-     * with the returned id instead -- this is documented, expected behavior, never an error. */
-    async verifySync(email: string): Promise<VerifySyncOutcome> {
-        const response = await this.request('/verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email }),
-        })
-        if (response.status === 202) {
-            const body = (await response.json()) as { id: string }
-            return { kind: 'accepted', id: body.id }
-        }
-        const result = await this.parseOrThrow<EmailVerificationResult & { operation: VerificationOperationMetadata }>(response)
-        return { kind: 'completed', result }
+        return this.parseOrThrow<BillingSummary>(response)
     }
 
     async submitAsyncVerification(email: string): Promise<{ id: string }> {
-        const response = await this.request('/verifyAsync', {
+        const response = await this.request('/v1/email-verifications', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email }),
         })
+
         return this.parseOrThrow(response)
     }
 
     async getAsyncVerificationStatus(id: string): Promise<AsyncVerificationState> {
-        const response = await this.request(`/verifyAsync/${encodeURIComponent(id)}`)
-        return this.parseOrThrow(response)
-    }
+        const response = await this.request(`/v1/email-verifications/${encodeURIComponent(id)}`)
 
-    async getVerificationResult(id: string): Promise<EmailVerificationResult> {
-        const response = await this.request(`/verifications/${encodeURIComponent(id)}`)
         return this.parseOrThrow(response)
     }
 
@@ -157,12 +141,15 @@ export class LefApiClient {
     async uploadBatchCsv(csvContent: string): Promise<{ id: string }> {
         const form = new FormData()
         form.append('file', new Blob([csvContent], { type: 'text/csv' }), 'batch.csv')
+
         const response = await this.request('/verifyBatch/csv', { method: 'POST', body: form })
+
         return this.parseOrThrow(response)
     }
 
     async getBatchStatus(id: string): Promise<BatchStatus> {
         const response = await this.request(`/verifyBatch/${encodeURIComponent(id)}`)
+
         return this.parseOrThrow(response)
     }
 
@@ -170,14 +157,22 @@ export class LefApiClient {
      * client's own responsibility limited to HTTP transport, same as every other method here. */
     async getBatchResultsCsv(id: string): Promise<string> {
         const response = await this.request(`/verifyBatch/${encodeURIComponent(id)}/results`)
-        if (!response.ok) await this.throwMappedError(response)
+
+        if (!response.ok) {
+            await this.throwMappedError(response)
+        }
+
         return await response.text()
     }
 
     private async request(path: string, init: RequestInit = {}): Promise<Response> {
         const token = await this.getAccessToken()
+
         try {
-            return await fetch(`${this.apiBaseUrl}${path}`, { ...init, headers: { ...init.headers, Authorization: `Bearer ${token}` } })
+            return await fetch(`${this.apiBaseUrl}${path}`, {
+                ...init,
+                headers: { ...init.headers, Authorization: `Bearer ${token}` },
+            })
         } catch {
             throw new UpstreamRequestError(mapNetworkError())
         }
@@ -185,11 +180,15 @@ export class LefApiClient {
 
     private async throwMappedError(response: Response): Promise<never> {
         const body = await response.json()
+
         throw new UpstreamRequestError(mapUpstreamError(response, body))
     }
 
     private async parseOrThrow<T>(response: Response): Promise<T> {
-        if (!response.ok) await this.throwMappedError(response)
+        if (!response.ok) {
+            await this.throwMappedError(response)
+        }
+
         return (await response.json()) as T
     }
 }

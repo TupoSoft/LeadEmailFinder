@@ -7,7 +7,7 @@ import {
     EmailVerificationSource,
 } from '@tuposoft/lead-email-finder/common'
 import { IsUUID } from 'class-validator'
-import { IsVerifiableEmail } from '../synchronous-verification/is-verifiable-email.decorator'
+import { IsVerifiableEmail } from '../is-verifiable-email.decorator'
 import {
     AsyncVerificationResult,
     AsyncVerificationStatus,

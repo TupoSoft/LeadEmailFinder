@@ -25,7 +25,7 @@ runtime:
             '/v1/organizations/{organizationId}/service-clients/{serviceClientId}/disable',
             '/v1/organizations/{organizationId}/service-clients/{serviceClientId}/rotate',
             '/v1/proxies', '/v1/proxies/{id}', '/v1/proxies/{id}/blacklists',
-            '/verifyAsync', '/verifyAsync/{id}', '/verifyBatch/csv', '/verifyBatch/{id}', '/verifyBatch/{id}/results'
+            '/v1/email-verifications', '/v1/email-verifications/{id}', '/verifyBatch/csv', '/verifyBatch/{id}', '/verifyBatch/{id}/results'
           ]);
           expect(Object.keys(res.body.paths['/v1/organizations/{organizationId}/members/{membershipId}']).sort()).to.deep.equal(['delete', 'patch']);
           expect(Object.keys(res.body.paths['/v1/organizations']).sort()).to.deep.equal(['get', 'post']);
@@ -55,9 +55,9 @@ runtime:
           expect(res.body.paths['/v1/organizations/invitations/{token}'].get.security).to.deep.equal([]);
           expect(Object.keys(res.body.paths['/v1/credit-purchases']).sort()).to.deep.equal(['get', 'post']);
           expect(Object.keys(res.body.paths['/v1/billing/summary'])).to.deep.equal(['get']);
-          expect(Object.keys(res.body.paths['/verifyAsync'])).to.deep.equal(['post']);
-          expect(Object.keys(res.body.paths['/verifyAsync/{id}'])).to.deep.equal(['get']);
-          expect(res.body.paths['/verifyAsync'].post.security).to.deep.include({ lef_session: [], 'x-csrf-token': [] });
+          expect(Object.keys(res.body.paths['/v1/email-verifications'])).to.deep.equal(['post']);
+          expect(Object.keys(res.body.paths['/v1/email-verifications/{id}'])).to.deep.equal(['get']);
+          expect(res.body.paths['/v1/email-verifications'].post.security).to.deep.include({ lef_session: [], 'x-csrf-token': [] });
           expect(Object.keys(res.body.paths['/verifyBatch/csv'])).to.deep.equal(['post']);
           expect(Object.keys(res.body.paths['/verifyBatch/{id}'])).to.deep.equal(['get']);
           expect(Object.keys(res.body.paths['/verifyBatch/{id}/results'])).to.deep.equal(['get']);

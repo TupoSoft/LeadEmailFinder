@@ -110,7 +110,7 @@ describe('check_async_verification over real HTTP and the real SDK transport', (
         const [url] = fetchMock.mock.calls.find(([input]: [string]) =>
             requestUrl(input).startsWith('https://lef-api.example'),
         ) as [string]
-        expect(url).toBe(`https://lef-api.example/verifyAsync/${operationId}`)
+        expect(url).toBe(`https://lef-api.example/v1/email-verifications/${operationId}`)
     })
 
     it('rejects a malformed id at the protocol level before ever calling the upstream API', async () => {

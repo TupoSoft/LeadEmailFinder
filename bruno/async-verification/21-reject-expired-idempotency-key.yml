@@ -4,7 +4,7 @@ info:
     seq: 21
 http:
     method: POST
-    url: '{{baseUrl}}/verifyAsync'
+    url: '{{baseUrl}}/v1/email-verifications'
     headers:
         - name: Authorization
           value: 'Bearer {{customerToken}}'

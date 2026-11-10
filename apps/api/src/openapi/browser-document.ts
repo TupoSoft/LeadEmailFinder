@@ -23,8 +23,8 @@ export const BROWSER_OPERATIONS = [
     { path: '/v1/credit-purchases', method: 'post' },
     { path: '/v1/organizations', method: 'get' },
     { path: '/v1/organizations', method: 'post' },
-    { path: '/verifyAsync', method: 'post' },
-    { path: '/verifyAsync/{id}', method: 'get' },
+    { path: '/v1/email-verifications', method: 'post' },
+    { path: '/v1/email-verifications/{id}', method: 'get' },
     { path: '/verifyBatch/csv', method: 'post' },
     { path: '/verifyBatch/{id}', method: 'get' },
     { path: '/verifyBatch/{id}/results', method: 'get' },
@@ -76,7 +76,9 @@ function isNode(value: unknown): value is Node {
 }
 
 function pointerParts(ref: string): string[] {
-    if (!ref.startsWith('#/')) throw new Error(`Unsupported local OpenAPI reference: ${ref}`)
+    if (!ref.startsWith('#/')) {
+        throw new Error(`Unsupported local OpenAPI reference: ${ref}`)
+    }
     return decodeURIComponent(ref.slice(2))
         .split('/')
         .map(part => part.replace(/~1/g, '/').replace(/~0/g, '~'))
@@ -94,8 +96,12 @@ function resolvePointer(document: unknown, ref: string): unknown {
 }
 
 function sortKeys(value: unknown): unknown {
-    if (Array.isArray(value)) return value.map(sortKeys)
-    if (!isNode(value)) return value
+    if (Array.isArray(value)) {
+        return value.map(sortKeys)
+    }
+    if (!isNode(value)) {
+        return value
+    }
     return Object.fromEntries(
         Object.keys(value)
             .sort()
@@ -118,7 +124,9 @@ export function buildBrowserDocument(full: OpenAPIObject): OpenAPIObject {
         servers: [{ url: '/' }],
     }
     delete browser.webhooks
-    if (browser.info.contact?.url) browser.info.contact.url = '/'
+    if (browser.info.contact?.url) {
+        browser.info.contact.url = '/'
+    }
     const components = browser.components as Record<string, Node>
     const references = new Set<string>()
     const retainedComponents = new Set<string>()
@@ -126,9 +134,13 @@ export function buildBrowserDocument(full: OpenAPIObject): OpenAPIObject {
 
     for (const { path, method } of BROWSER_OPERATIONS) {
         const pathItem = source.paths[path]
-        if (!pathItem?.[method]) throw new Error(`Missing required browser operation: ${method.toUpperCase()} ${path}`)
+        if (!pathItem?.[method]) {
+            throw new Error(`Missing required browser operation: ${method.toUpperCase()} ${path}`)
+        }
         // A path reference can import methods outside the reviewed allow list.
-        if (pathItem.$ref) throw new Error(`Browser paths must define operations inline: ${path}`)
+        if (pathItem.$ref) {
+            throw new Error(`Browser paths must define operations inline: ${path}`)
+        }
         if (!browser.paths[path]) {
             browser.paths[path] = { ...pathItem }
             for (const excludedMethod of HTTP_METHODS) delete browser.paths[path][excludedMethod]
@@ -137,16 +149,24 @@ export function buildBrowserDocument(full: OpenAPIObject): OpenAPIObject {
     }
 
     function retainReference(ref: string, kind: Kind): void {
-        if (!ref.startsWith('#')) return
-        if (references.has(ref)) return
+        if (!ref.startsWith('#')) {
+            return
+        }
+        if (references.has(ref)) {
+            return
+        }
         references.add(ref)
         const target = resolvePointer(source, ref)
         const [root, category, name] = pointerParts(ref)
         if (root === 'components') {
             const componentKind = COMPONENT_KINDS[category]
-            if (!componentKind || !name) throw new Error(`Unsupported component reference: ${ref}`)
+            if (!componentKind || !name) {
+                throw new Error(`Unsupported component reference: ${ref}`)
+            }
             const identity = JSON.stringify([category, name])
-            if (retainedComponents.has(identity)) return
+            if (retainedComponents.has(identity)) {
+                return
+            }
             retainedComponents.add(identity)
             const original = (source.components as Record<string, Node>)[category][name]
             components[category] ??= {}
@@ -163,9 +183,13 @@ export function buildBrowserDocument(full: OpenAPIObject): OpenAPIObject {
     }
 
     function retainSecurity(value: unknown): void {
-        if (!Array.isArray(value)) return
+        if (!Array.isArray(value)) {
+            return
+        }
         for (const requirement of value) {
-            if (!isNode(requirement)) continue
+            if (!isNode(requirement)) {
+                continue
+            }
             for (const name of Object.keys(requirement)) {
                 retainReference(componentReference('securitySchemes', name), 'securityScheme')
             }
@@ -183,18 +207,29 @@ export function buildBrowserDocument(full: OpenAPIObject): OpenAPIObject {
     // Walk OpenAPI structure explicitly: example/default payloads and schema property names
     // may themselves contain "$ref", "security", or "servers" as ordinary application data.
     function visit(value: unknown, kind: Kind): void {
-        if (!isNode(value)) return
-        if (typeof value.$ref === 'string') retainReference(value.$ref, kind)
+        if (!isNode(value)) {
+            return
+        }
+        if (typeof value.$ref === 'string') {
+            retainReference(value.$ref, kind)
+        }
         switch (kind) {
             case 'pathItem':
-                if (value.servers) value.servers = [{ url: '/' }]
+                if (value.servers) {
+                    value.servers = [{ url: '/' }]
+                }
                 visitArray(value.parameters, 'parameter')
                 for (const method of HTTP_METHODS) visit(value[method], 'operation')
                 break
             case 'operation':
-                if (value.servers) value.servers = [{ url: '/' }]
+                if (value.servers) {
+                    value.servers = [{ url: '/' }]
+                }
                 if (Array.isArray(value.tags)) {
-                    for (const tag of value.tags) if (typeof tag === 'string') usedTags.add(tag)
+                    for (const tag of value.tags)
+                        if (typeof tag === 'string') {
+                            usedTags.add(tag)
+                        }
                 }
                 retainSecurity(value.security)
                 visitArray(value.parameters, 'parameter')
@@ -224,9 +259,12 @@ export function buildBrowserDocument(full: OpenAPIObject): OpenAPIObject {
                     visit(value[key], 'schema')
                 if (isNode(value.discriminator) && isNode(value.discriminator.mapping)) {
                     for (const ref of Object.values(value.discriminator.mapping)) {
-                        if (typeof ref !== 'string') continue
-                        if (ref.startsWith('#')) retainReference(ref, 'schema')
-                        else if (source.components?.schemas && Object.hasOwn(source.components.schemas, ref)) {
+                        if (typeof ref !== 'string') {
+                            continue
+                        }
+                        if (ref.startsWith('#')) {
+                            retainReference(ref, 'schema')
+                        } else if (source.components?.schemas && Object.hasOwn(source.components.schemas, ref)) {
                             retainReference(componentReference('schemas', ref), 'schema')
                         }
                     }
@@ -255,12 +293,18 @@ export function buildBrowserDocument(full: OpenAPIObject): OpenAPIObject {
                 visitMap(value.headers, 'header')
                 break
             case 'link':
-                if (value.server) value.server = { url: '/' }
-                if (typeof value.operationRef === 'string') retainReference(value.operationRef, 'operation')
+                if (value.server) {
+                    value.server = { url: '/' }
+                }
+                if (typeof value.operationRef === 'string') {
+                    retainReference(value.operationRef, 'operation')
+                }
                 break
             case 'callback':
                 for (const [key, item] of Object.entries(value)) {
-                    if (key !== '$ref' && !key.startsWith('x-')) visit(item, 'pathItem')
+                    if (key !== '$ref' && !key.startsWith('x-')) {
+                        visit(item, 'pathItem')
+                    }
                 }
                 break
             case 'example':
@@ -271,7 +315,9 @@ export function buildBrowserDocument(full: OpenAPIObject): OpenAPIObject {
 
     retainSecurity(browser.security)
     visitMap(browser.paths, 'pathItem')
-    if (source.tags) browser.tags = source.tags.filter(tag => usedTags.has(tag.name))
+    if (source.tags) {
+        browser.tags = source.tags.filter(tag => usedTags.has(tag.name))
+    }
     for (const ref of references) resolvePointer(browser, ref)
     return sortKeys(browser) as OpenAPIObject
 }

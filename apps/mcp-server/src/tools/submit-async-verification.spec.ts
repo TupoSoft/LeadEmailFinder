@@ -72,7 +72,7 @@ describe('submit_async_verification over real HTTP and the real SDK transport', 
         expect(result.isError).toBeFalsy()
         expect(JSON.parse(result.content[0]?.text ?? '')).toEqual({ id: 'async-id' })
         const [, init] = fetchMock.mock.calls.find(([input]: [string]) =>
-            requestUrl(input).includes('/verifyAsync'),
+            requestUrl(input).includes('/v1/email-verifications'),
         ) as [string, RequestInit]
         expect(JSON.parse(init.body as string)).toEqual({ email: 'person@lef.test' })
     })

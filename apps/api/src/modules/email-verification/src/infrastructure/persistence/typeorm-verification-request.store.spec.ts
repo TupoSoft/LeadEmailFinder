@@ -1,6 +1,8 @@
 import { DataSource, EntityManager } from 'typeorm'
 import { NewVerificationRequestInput } from '../../application/ports/verification-request-store'
 import { VerificationRequestEntity } from './typeorm/verification-request.entity'
+import { VerificationExecutionEntity } from './typeorm/verification-execution.entity'
+import { VerificationSettlementIntentionEntity } from './typeorm/verification-settlement-intention.entity'
 import { TypeOrmVerificationRequestStore } from './typeorm-verification-request.store'
 
 const organizationId = '10000000-0000-4000-8000-000000000001'
@@ -116,7 +118,9 @@ describe('TypeOrmVerificationRequestStore', () => {
     })
 
     it('conflicts a repeated key with a different address', async () => {
-        manager.findOne.mockResolvedValue(entity({ clientRequestKey: 'key-1', normalizedAddress: 'other@example.test' }))
+        manager.findOne.mockResolvedValue(
+            entity({ clientRequestKey: 'key-1', normalizedAddress: 'other@example.test' }),
+        )
         const outcome = await store.insert(input({ clientRequestKey: 'key-1' }))
         expect(outcome).toEqual({ kind: 'key-conflict' })
         expect(manager.save).not.toHaveBeenCalled()
@@ -130,7 +134,12 @@ describe('TypeOrmVerificationRequestStore', () => {
 
     it('marks a cache-sourced insert settled with its result immediately', async () => {
         manager.findOne.mockResolvedValue(null)
-        const cacheInput = input({ source: 'cache', resultId: 'result-1', billingState: 'settled', finalReason: 'cached' })
+        const cacheInput = input({
+            source: 'cache',
+            resultId: 'result-1',
+            billingState: 'settled',
+            finalReason: 'cached',
+        })
         manager.findOneBy.mockResolvedValue(entity(cacheInput))
         await store.insert(cacheInput)
         expect(manager.create).toHaveBeenCalledWith(
@@ -181,13 +190,45 @@ describe('TypeOrmVerificationRequestStore', () => {
             expect(manager.update).not.toHaveBeenCalled()
         })
 
-        it('returns the pending winner after an equivalent UUID insertion race', async () => {
-            const pending = entity(batchInput)
-            queryBuilder.execute.mockResolvedValue({ raw: [] })
-            manager.findOneBy.mockResolvedValue(pending)
+        it('inherits a completed execution when a fresh batch payer materializes after settlement', async () => {
+            manager.findOne.mockResolvedValue({
+                executionId: batchInput.executionId,
+                state: 'completed',
+                payerRequestId: batchInput.requestId,
+                resultId: 'result-1',
+            })
+            manager.findOneBy.mockImplementation((type: unknown) =>
+                type === VerificationSettlementIntentionEntity
+                    ? Promise.resolve({ state: 'confirmed', decision: 'capture' })
+                    : Promise.resolve(
+                          entity({
+                              ...batchInput,
+                              billingState: 'settled',
+                              resultId: 'result-1',
+                              finalReason: 'conclusive',
+                              chargedCount: 1,
+                          }),
+                      ),
+            )
 
-            await expect(store.insert(batchInput)).resolves.toEqual({ kind: 'replayed', record: pending })
-            expect(manager.save).not.toHaveBeenCalled()
+            const outcome = await store.insert(batchInput)
+
+            expect(outcome).toEqual({
+                kind: 'inserted',
+                record: expect.objectContaining({
+                    billingState: 'settled',
+                    chargedCount: 1,
+                    finalReason: 'conclusive',
+                    resultId: 'result-1',
+                }),
+            })
+            expect(manager.findOne).toHaveBeenCalledWith(
+                VerificationExecutionEntity,
+                expect.objectContaining({ lock: { mode: 'pessimistic_write' } }),
+            )
+            expect(queryBuilder.values).toHaveBeenCalledWith(
+                expect.objectContaining({ billingState: 'settled', chargedCount: 1, resultId: 'result-1' }),
+            )
         })
 
         it.each(['sync', 'async', 'batch_child'] as const)(
@@ -230,14 +271,17 @@ describe('TypeOrmVerificationRequestStore', () => {
             ['source', { source: 'shared' }],
             ['execution', { executionId: 'other-execution' }],
             ['client key', { clientRequestKey: 'other-key' }],
-        ] satisfies [string, Partial<VerificationRequestEntity>][])('rejects a conflicting %s without mutation', async (_field, conflict) => {
-            queryBuilder.execute.mockResolvedValue({ raw: [] })
-            manager.findOneBy.mockResolvedValue(entity({ ...batchInput, ...conflict }))
+        ] satisfies [string, Partial<VerificationRequestEntity>][])(
+            'rejects a conflicting %s without mutation',
+            async (_field, conflict) => {
+                queryBuilder.execute.mockResolvedValue({ raw: [] })
+                manager.findOneBy.mockResolvedValue(entity({ ...batchInput, ...conflict }))
 
-            await expect(store.insert(batchInput)).rejects.toThrow('batch_request_identity_conflict')
-            expect(manager.save).not.toHaveBeenCalled()
-            expect(manager.update).not.toHaveBeenCalled()
-        })
+                await expect(store.insert(batchInput)).rejects.toThrow('batch_request_identity_conflict')
+                expect(manager.save).not.toHaveBeenCalled()
+                expect(manager.update).not.toHaveBeenCalled()
+            },
+        )
 
         it('conceals a UUID conflict belonging to another organization when the scoped read finds no winner', async () => {
             queryBuilder.execute.mockResolvedValue({ raw: [] })
@@ -251,27 +295,30 @@ describe('TypeOrmVerificationRequestStore', () => {
             expect(manager.save).not.toHaveBeenCalled()
         })
 
-        it.each(['cache', 'cooldown'] as const)('preserves the recorded %s result association on replay', async source => {
-            const freeInput = input({
-                deliveryMode: 'batch',
-                source,
-                executionId: null,
-                resultId: 'original-result',
-                reservedCount: 0,
-                billingState: 'settled',
-                finalReason: source === 'cache' ? 'cached' : 'inconclusive',
-            })
-            const freeReceipt = entity({ ...freeInput, settledAt: new Date('2026-09-17T10:01:00Z') })
-            queryBuilder.execute.mockResolvedValue({ raw: [] })
-            manager.findOneBy.mockResolvedValue(freeReceipt)
+        it.each(['cache', 'cooldown'] as const)(
+            'preserves the recorded %s result association on replay',
+            async source => {
+                const freeInput = input({
+                    deliveryMode: 'batch',
+                    source,
+                    executionId: null,
+                    resultId: 'original-result',
+                    reservedCount: 0,
+                    billingState: 'settled',
+                    finalReason: source === 'cache' ? 'cached' : 'inconclusive',
+                })
+                const freeReceipt = entity({ ...freeInput, settledAt: new Date('2026-09-17T10:01:00Z') })
+                queryBuilder.execute.mockResolvedValue({ raw: [] })
+                manager.findOneBy.mockResolvedValue(freeReceipt)
 
-            await expect(store.insert(freeInput)).resolves.toEqual({ kind: 'replayed', record: freeReceipt })
-            await expect(store.insert({ ...freeInput, resultId: 'newer-result' })).rejects.toThrow(
-                'batch_request_identity_conflict',
-            )
-            expect(manager.save).not.toHaveBeenCalled()
-            expect(manager.update).not.toHaveBeenCalled()
-        })
+                await expect(store.insert(freeInput)).resolves.toEqual({ kind: 'replayed', record: freeReceipt })
+                await expect(store.insert({ ...freeInput, resultId: 'newer-result' })).rejects.toThrow(
+                    'batch_request_identity_conflict',
+                )
+                expect(manager.save).not.toHaveBeenCalled()
+                expect(manager.update).not.toHaveBeenCalled()
+            },
+        )
     })
 
     it('attaches an execution to an existing request', async () => {
@@ -314,13 +361,22 @@ describe('TypeOrmVerificationRequestStore', () => {
                 VerificationRequestEntity,
                 expect.objectContaining({ where: { executionId: 'execution-1', organizationId } }),
             )
-            expect(manager.save).toHaveBeenCalledWith(
-                VerificationRequestEntity,
-                [
-                    expect.objectContaining({ requestId: 'request-1', billingState: 'settled', finalReason: 'failed', chargedCount: 0, resultId: null }),
-                    expect.objectContaining({ requestId: 'request-2', billingState: 'settled', finalReason: 'failed', chargedCount: 0, resultId: null }),
-                ],
-            )
+            expect(manager.save).toHaveBeenCalledWith(VerificationRequestEntity, [
+                expect.objectContaining({
+                    requestId: 'request-1',
+                    billingState: 'settled',
+                    finalReason: 'failed',
+                    chargedCount: 0,
+                    resultId: null,
+                }),
+                expect.objectContaining({
+                    requestId: 'request-2',
+                    billingState: 'settled',
+                    finalReason: 'failed',
+                    chargedCount: 0,
+                    resultId: null,
+                }),
+            ])
         })
 
         it('is a no-op when no linked requests exist', async () => {
@@ -331,7 +387,12 @@ describe('TypeOrmVerificationRequestStore', () => {
 
         it('skips a request that is already settled, replaying idempotently', async () => {
             manager.find.mockResolvedValue([
-                entity({ requestId: 'request-1', executionId: 'execution-1', billingState: 'settled', finalReason: 'conclusive' }),
+                entity({
+                    requestId: 'request-1',
+                    executionId: 'execution-1',
+                    billingState: 'settled',
+                    finalReason: 'conclusive',
+                }),
             ])
 
             await store.settleCanceled('execution-1', organizationId)

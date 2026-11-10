@@ -30,7 +30,7 @@ import { BatchAdmissionService } from '../../application/delivery/batch/batch-ad
 import { BatchAdmissionRecoveryService } from '../../application/delivery/batch/batch-admission-recovery.service'
 import { BatchAdmissionFence } from '../../application/delivery/batch/batch-admission-store'
 import { VerificationReconciler } from '../../application/operations/verification-reconciler'
-import { VerificationExecutionRunner } from '../../application/operations/verification-execution-runner'
+import { VerificationExecutionDispatcher } from '../../application/ports/verification-execution-dispatcher'
 import { TypeOrmVerificationRequestStore } from './typeorm-verification-request.store'
 import { TypeOrmVerificationExecutionStore } from './typeorm-verification-execution.store'
 import { TypeOrmVerificationSettlementStore } from './typeorm-verification-settlement.store'
@@ -41,6 +41,7 @@ import { EmailEntity } from './typeorm/email.entity'
 import { EmailVerificationEntity } from './typeorm/email-verification.entity'
 import { VerificationRequestEntity } from './typeorm/verification-request.entity'
 import { VerificationExecutionEntity } from './typeorm/verification-execution.entity'
+import { VerificationCommandOutboxEntity } from './typeorm/verification-command-outbox.entity'
 import { VerificationSettlementIntentionEntity } from './typeorm/verification-settlement-intention.entity'
 import { BatchAdmissionEntity } from './typeorm/batch-admission.entity'
 import { BatchUniqueAddressEntity } from './typeorm/batch-unique-address.entity'
@@ -73,6 +74,7 @@ const entities = [
     EmailVerificationEntity,
     VerificationRequestEntity,
     VerificationExecutionEntity,
+    VerificationCommandOutboxEntity,
     VerificationSettlementIntentionEntity,
     BatchAdmissionEntity,
     BatchUniqueAddressEntity,
@@ -155,8 +157,12 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
 
     afterAll(async () => {
         await moduleRef?.close()
-        if (secondDataSource?.isInitialized) await secondDataSource.destroy()
-        if (schemaDataSource?.isInitialized) await schemaDataSource.destroy()
+        if (secondDataSource?.isInitialized) {
+            await secondDataSource.destroy()
+        }
+        if (schemaDataSource?.isInitialized) {
+            await schemaDataSource.destroy()
+        }
     })
 
     beforeEach(async () => {
@@ -206,11 +212,18 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
     })
 
     /** Drives bounded advancements until the group finishes admission and receipt finalization. */
-    async function admitToCompletion(batchId: string, service: BatchAdmissionService = batchAdmissionService): Promise<number> {
+    async function admitToCompletion(
+        batchId: string,
+        service: BatchAdmissionService = batchAdmissionService,
+    ): Promise<number> {
         for (let advancements = 1; advancements <= 50; advancements++) {
             const outcome = await service.admit(batchId, organizationId)
-            if (outcome.kind === 'complete') return advancements
-            if (outcome.kind === 'busy') throw new Error('Unexpected busy batch admission')
+            if (outcome.kind === 'complete') {
+                return advancements
+            }
+            if (outcome.kind === 'busy') {
+                throw new Error('Unexpected busy batch admission')
+            }
         }
         throw new Error('Batch admission did not complete')
     }
@@ -223,7 +236,9 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
         const batchId = randomUUID()
         const addresses = new Map<string, number>()
         emails.forEach((email, index) => {
-            if (!addresses.has(email.toLowerCase())) addresses.set(email.toLowerCase(), index + 1)
+            if (!addresses.has(email.toLowerCase())) {
+                addresses.set(email.toLowerCase(), index + 1)
+            }
         })
         await batchAdmissions.createOrReplay({
             batchId,
@@ -343,7 +358,9 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
     it('runs the full funded execution through capture and reuses the cached result for free afterward', async () => {
         const funded = await admission.admit({ organizationId, email: 'person@example.test', deliveryMode: 'sync' })
         expect(funded.kind).toBe('funded')
-        if (funded.kind !== 'funded') throw new Error('unreachable')
+        if (funded.kind !== 'funded') {
+            throw new Error('unreachable')
+        }
 
         await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 10, reserved: 1 }))
 
@@ -356,7 +373,9 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
             finalReason: 'conclusive',
         })
         expect(persisted.kind).toBe('persisted')
-        if (persisted.kind !== 'persisted') throw new Error('unreachable')
+        if (persisted.kind !== 'persisted') {
+            throw new Error('unreachable')
+        }
 
         await settlementService.settle(funded.executionId, organizationId)
 
@@ -378,7 +397,9 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
     it('releases the reservation on an inconclusive result without ever debiting the account', async () => {
         const funded = await admission.admit({ organizationId, email: 'unclear@example.test', deliveryMode: 'sync' })
         expect(funded.kind).toBe('funded')
-        if (funded.kind !== 'funded') throw new Error('unreachable')
+        if (funded.kind !== 'funded') {
+            throw new Error('unreachable')
+        }
 
         await settlements.persistResultAndIntention({
             executionId: funded.executionId,
@@ -425,7 +446,9 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
             email: 'stuck-cleanup@example.test',
             deliveryMode: 'sync',
         })
-        if (funded.kind !== 'funded') throw new Error('unreachable')
+        if (funded.kind !== 'funded') {
+            throw new Error('unreachable')
+        }
 
         // Models the reconciler's own recovery scenario: the row is already terminal `canceled` (as if
         // `cancelIfNoCaptureIntention` had already run), but the credit release / request settlement that must
@@ -450,7 +473,9 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
 
     it('replays settlement confirmation idempotently without a second credit call', async () => {
         const funded = await admission.admit({ organizationId, email: 'replay@example.test', deliveryMode: 'sync' })
-        if (funded.kind !== 'funded') throw new Error('unreachable')
+        if (funded.kind !== 'funded') {
+            throw new Error('unreachable')
+        }
 
         await settlements.persistResultAndIntention({
             executionId: funded.executionId,
@@ -544,7 +569,9 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
                 decision,
                 finalReason,
             })
-            if (result.kind !== 'persisted') throw new Error('Expected persisted batch result')
+            if (result.kind !== 'persisted') {
+                throw new Error('Expected persisted batch result')
+            }
             await settlementService.settle(address.executionId!, organizationId)
 
             const receipt = await requests.findById(address.payerRequestId!, organizationId)
@@ -608,7 +635,9 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
 
     it('keeps a batch follower free when the single-verification payer captures its credit', async () => {
         const owner = await admission.admit({ organizationId, email: 'shared@example.test', deliveryMode: 'sync' })
-        if (owner.kind !== 'funded') throw new Error('Expected funded owner')
+        if (owner.kind !== 'funded') {
+            throw new Error('Expected funded owner')
+        }
         const batchId = await prepareBatch(['Shared@example.test', 'shared@example.test'])
         await batchAdmissionService.admit(batchId, organizationId)
         const [address] = await batchAdmissions.pageUniqueAddresses(batchId, organizationId, 0, 10)
@@ -704,7 +733,9 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
             throw new Error('injected_outcome_write_interruption')
         })
 
-        await expect(batchAdmissionService.admit(batchId, organizationId)).rejects.toThrow('injected_outcome_write_interruption')
+        await expect(batchAdmissionService.admit(batchId, organizationId)).rejects.toThrow(
+            'injected_outcome_write_interruption',
+        )
         const [before] = await batchAdmissions.pageUniqueAddresses(batchId, organizationId, 0, 10)
         expect(before.admissionKind).toBeNull()
         expect(before.payerRequestId).not.toBeNull()
@@ -748,13 +779,17 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
                 throw new Error('injected_second_interruption')
             })
 
-        await expect(batchAdmissionService.admit(batchId, organizationId)).rejects.toThrow('injected_first_interruption')
+        await expect(batchAdmissionService.admit(batchId, organizationId)).rejects.toThrow(
+            'injected_first_interruption',
+        )
         const firstClaim = await schemaDataSource
             .getRepository(VerificationExecutionEntity)
             .findBy({ organizationId, fundingOwnerType: 'batch_group', fundingOwnerId: batchId })
         expect(firstClaim).toHaveLength(1)
 
-        await expect(batchAdmissionService.admit(batchId, organizationId)).rejects.toThrow('injected_second_interruption')
+        await expect(batchAdmissionService.admit(batchId, organizationId)).rejects.toThrow(
+            'injected_second_interruption',
+        )
         const secondClaim = await schemaDataSource
             .getRepository(VerificationExecutionEntity)
             .findBy({ organizationId, fundingOwnerType: 'batch_group', fundingOwnerId: batchId })
@@ -787,7 +822,9 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
         expect(secondAddress.executionId).toBe(firstAddress.executionId)
         await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 10, reserved: 1 }))
         const payerRequest = await requests.findById(secondAddress.payerRequestId!, organizationId)
-        expect(payerRequest).toEqual(expect.objectContaining({ source: 'shared', billingState: 'pending', reservedCount: 0 }))
+        expect(payerRequest).toEqual(
+            expect.objectContaining({ source: 'shared', billingState: 'pending', reservedCount: 0 }),
+        )
     })
 
     it('replays an insertion interrupted after commit without resetting the subsequently settled receipt', async () => {
@@ -925,21 +962,20 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
 
     describe('batch group funding recovery', () => {
         let recovery: BatchAdmissionRecoveryService
-        let runner: jest.Mocked<Pick<VerificationExecutionRunner, 'execute'>>
+        let dispatcher: jest.Mocked<VerificationExecutionDispatcher>
         let reconciler: VerificationReconciler
 
         beforeEach(() => {
             recovery = new BatchAdmissionRecoveryService(batchAdmissions, batchAdmissionService, clock)
-            runner = { execute: jest.fn().mockResolvedValue({ kind: 'not-runnable' }) }
+            dispatcher = { dispatch: jest.fn().mockResolvedValue(undefined) }
             reconciler = new VerificationReconciler(
                 executions,
                 requests,
                 settlements,
                 settlementService,
-                runner as unknown as VerificationExecutionRunner,
+                dispatcher,
                 credits,
                 clock,
-                5_000,
                 recovery,
             )
         })
@@ -964,9 +1000,10 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
         }
 
         async function ownedExecutions(batchId: string): Promise<VerificationExecutionEntity[]> {
-            return schemaDataSource
-                .getRepository(VerificationExecutionEntity)
-                .find({ where: { organizationId, fundingOwnerType: 'batch_group', fundingOwnerId: batchId }, order: { normalizedAddress: 'ASC' } })
+            return schemaDataSource.getRepository(VerificationExecutionEntity).find({
+                where: { organizationId, fundingOwnerType: 'batch_group', fundingOwnerId: batchId },
+                order: { normalizedAddress: 'ASC' },
+            })
         }
 
         async function reservations(): Promise<CreditReservation[]> {
@@ -997,18 +1034,27 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
             const admitting = batchAdmissionService.admit(batchId, organizationId)
             await paused.reached
             for (let tick = 0; tick < 3; tick++) {
-                await expect(reconciler.reconcile(100)).resolves.toEqual(expect.objectContaining({ batchGroupsChecked: 0 }))
+                await expect(reconciler.reconcile(100)).resolves.toEqual(
+                    expect.objectContaining({ batchGroupsChecked: 0 }),
+                )
                 advanceClock(30_000)
                 // The live owner renews at its liveness cadence; model that renewal for the paused call.
                 const group = await batchAdmissions.findById(batchId, organizationId)
                 await batchAdmissions.renewAdmissionLease(
                     batchId,
                     organizationId,
-                    { ownerId: group!.admissionLeaseOwnerId!, generation: group!.admissionGeneration, now: currentTime },
+                    {
+                        ownerId: group!.admissionLeaseOwnerId!,
+                        generation: group!.admissionGeneration,
+                        now: currentTime,
+                    },
                     new Date(currentTime.getTime() + LEASE_DURATION_MS),
                 )
             }
-            expect((await ownedExecutions(batchId)).map(execution => execution.state)).toEqual(['funding_pending', 'funding_pending'])
+            expect((await ownedExecutions(batchId)).map(execution => execution.state)).toEqual([
+                'funding_pending',
+                'funding_pending',
+            ])
             paused.release()
 
             await expect(admitting).resolves.toEqual({ kind: 'complete' })
@@ -1022,7 +1068,9 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
             let outcomes = 0
             jest.spyOn(batchAdmissions, 'recordAdmissionOutcome').mockImplementation((...args) => {
                 outcomes += 1
-                if (outcomes === 2) return Promise.reject(new Error('injected_worker_loss'))
+                if (outcomes === 2) {
+                    return Promise.reject(new Error('injected_worker_loss'))
+                }
                 return record(...args)
             })
             crashWithoutRelease()
@@ -1049,7 +1097,9 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
             const finalIdentities = await batchAdmissions.pageUniqueAddresses(batchId, organizationId, 0, 10)
             // Identities assigned before the loss survive; the untouched address receives its first one on recovery.
             identities.forEach((address, index) => {
-                if (address.payerRequestId !== null) expect(finalIdentities[index].payerRequestId).toBe(address.payerRequestId)
+                if (address.payerRequestId !== null) {
+                    expect(finalIdentities[index].payerRequestId).toBe(address.payerRequestId)
+                }
             })
             expect(finalIdentities.every(address => address.payerRequestId !== null)).toBe(true)
             await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 10, reserved: 3 }))
@@ -1059,7 +1109,9 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
 
         it('resumes the exact manifest after worker loss between reservation and decision commit', async () => {
             const batchId = await prepareBatch(['d1@example.test', 'd2@example.test'])
-            jest.spyOn(batchAdmissions, 'recordFundingDecision').mockRejectedValueOnce(new Error('injected_decision_loss'))
+            jest.spyOn(batchAdmissions, 'recordFundingDecision').mockRejectedValueOnce(
+                new Error('injected_decision_loss'),
+            )
             crashWithoutRelease()
             const reserveMany = jest.spyOn(credits, 'reserveMany')
 
@@ -1083,10 +1135,24 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
             const batchId = await prepareBatch(['f1@example.test', 'f2@example.test'])
             const staleStore = new TypeOrmBatchAdmissionStore(secondDataSource)
             const staleExecutions = new TypeOrmVerificationExecutionStore(secondDataSource)
-            const leased = await staleStore.claimAdmissionLease(batchId, organizationId, randomUUID(), currentTime, new Date(currentTime.getTime() + LEASE_DURATION_MS))
-            if (leased.kind !== 'acquired') throw new Error('Expected the first owner to acquire the lease')
-            const stale: BatchAdmissionFence = { ownerId: leased.record.admissionLeaseOwnerId!, generation: leased.generation, now: currentTime }
-            await expect(staleStore.transitionState(batchId, organizationId, stale, 'validating', 'admitting')).resolves.toBe('applied')
+            const leased = await staleStore.claimAdmissionLease(
+                batchId,
+                organizationId,
+                randomUUID(),
+                currentTime,
+                new Date(currentTime.getTime() + LEASE_DURATION_MS),
+            )
+            if (leased.kind !== 'acquired') {
+                throw new Error('Expected the first owner to acquire the lease')
+            }
+            const stale: BatchAdmissionFence = {
+                ownerId: leased.record.admissionLeaseOwnerId!,
+                generation: leased.generation,
+                now: currentTime,
+            }
+            await expect(
+                staleStore.transitionState(batchId, organizationId, stale, 'validating', 'admitting'),
+            ).resolves.toBe('applied')
 
             advanceClock(LEASE_DURATION_MS + 1)
             await admitToCompletion(batchId)
@@ -1094,14 +1160,33 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
             const [owned] = await ownedExecutions(batchId)
 
             await expect(
-                staleExecutions.claimOrJoinForBatchGroup(batchId, staleNow, organizationId, 'f3@example.test', randomUUID(), randomUUID(), currentTime, () => false),
+                staleExecutions.claimOrJoinForBatchGroup(
+                    batchId,
+                    staleNow,
+                    organizationId,
+                    'f3@example.test',
+                    randomUUID(),
+                    randomUUID(),
+                    currentTime,
+                    () => false,
+                ),
             ).resolves.toEqual({ kind: 'stale-admission' })
             await expect(staleStore.freezeFundingManifest(batchId, organizationId, staleNow)).resolves.toBe('stale')
-            await expect(staleStore.recordFundingDecision(batchId, organizationId, staleNow, 'approved')).resolves.toBe('stale')
-            await expect(staleExecutions.markBatchGroupQueued(owned.executionId, organizationId, batchId, staleNow)).resolves.toBe('stale')
-            await expect(staleStore.renewAdmissionLease(batchId, organizationId, staleNow, new Date(currentTime.getTime() + 1))).resolves.toBe(false)
+            await expect(staleStore.recordFundingDecision(batchId, organizationId, staleNow, 'approved')).resolves.toBe(
+                'stale',
+            )
+            await expect(
+                staleExecutions.markBatchGroupQueued(owned.executionId, organizationId, batchId, staleNow),
+            ).resolves.toBe('stale')
+            await expect(
+                staleStore.renewAdmissionLease(batchId, organizationId, staleNow, new Date(currentTime.getTime() + 1)),
+            ).resolves.toBe(false)
             await expect(batchAdmissions.findById(batchId, organizationId)).resolves.toEqual(
-                expect.objectContaining({ state: 'insufficient_credits', fundingDecision: 'denied', finalizationState: 'ready' }),
+                expect.objectContaining({
+                    state: 'insufficient_credits',
+                    fundingDecision: 'denied',
+                    finalizationState: 'ready',
+                }),
             )
             expect((await ownedExecutions(batchId)).every(execution => execution.state === 'canceled')).toBe(true)
             await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 1, reserved: 0 }))
@@ -1110,11 +1195,17 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
         it.each(['close-then-late-reserve', 'reserve-then-close'] as const)(
             'leaves no hold for a stale reservation racing closure (%s)',
             async order => {
-                await schemaDataSource.getRepository(OrganizationCreditAccount).update({ organizationId }, { balance: 1 })
+                await schemaDataSource
+                    .getRepository(OrganizationCreditAccount)
+                    .update({ organizationId }, { balance: 1 })
                 const batchId = await prepareBatch(['o1@example.test', 'o2@example.test'])
                 await admitToCompletion(batchId)
-                const owned = (await batchAdmissions.listOwnedExecutionIds(batchId, organizationId)).map(operationId => ({ operationId, amount: 1 }))
-                await schemaDataSource.getRepository(OrganizationCreditAccount).update({ organizationId }, { balance: 10 })
+                const owned = (await batchAdmissions.listOwnedExecutionIds(batchId, organizationId)).map(
+                    operationId => ({ operationId, amount: 1 }),
+                )
+                await schemaDataSource
+                    .getRepository(OrganizationCreditAccount)
+                    .update({ organizationId }, { balance: 10 })
 
                 if (order === 'close-then-late-reserve') {
                     const late = await credits.reserveMany(organizationId, owned)
@@ -1130,7 +1221,11 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
                 await expect(readAccount()).resolves.toEqual(expect.objectContaining({ balance: 10, reserved: 0 }))
                 expect((await reservations()).map(reservation => reservation.state)).toEqual(['released', 'released'])
                 expect((await ownedExecutions(batchId)).every(execution => execution.state === 'canceled')).toBe(true)
-                expect((await receipts(batchId)).every(receipt => receipt.finalReason === 'failed' && receipt.chargedCount === 0)).toBe(true)
+                expect(
+                    (await receipts(batchId)).every(
+                        receipt => receipt.finalReason === 'failed' && receipt.chargedCount === 0,
+                    ),
+                ).toBe(true)
                 await expect(admitToCompletion(batchId)).resolves.toBe(1)
                 await expect(batchAdmissions.findById(batchId, organizationId)).resolves.toEqual(
                     expect.objectContaining({ state: 'insufficient_credits', fundingDecision: 'denied' }),
@@ -1144,8 +1239,13 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
             const reserveMany = jest.spyOn(credits, 'reserveMany')
             jest.spyOn(credits, 'closeAdmissionMany').mockRejectedValueOnce(new Error('injected_closure_interruption'))
 
-            await expect(batchAdmissionService.admit(batchId, organizationId)).resolves.toMatchObject({ kind: 'continuation', phase: 'closure' })
-            await expect(batchAdmissionService.admit(batchId, organizationId)).rejects.toThrow('injected_closure_interruption')
+            await expect(batchAdmissionService.admit(batchId, organizationId)).resolves.toMatchObject({
+                kind: 'continuation',
+                phase: 'closure',
+            })
+            await expect(batchAdmissionService.admit(batchId, organizationId)).rejects.toThrow(
+                'injected_closure_interruption',
+            )
             await schemaDataSource.getRepository(OrganizationCreditAccount).update({ organizationId }, { balance: 100 })
             await admitToCompletion(batchId)
 
@@ -1177,8 +1277,12 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
 
         it('replays an approved group without reserving again after its execution already captured', async () => {
             const batchId = await prepareBatch(['cap@example.test'])
-            jest.spyOn(batchAdmissions, 'markFinalizationReady').mockRejectedValueOnce(new Error('injected_finalization_loss'))
-            await expect(batchAdmissionService.admit(batchId, organizationId)).rejects.toThrow('injected_finalization_loss')
+            jest.spyOn(batchAdmissions, 'markFinalizationReady').mockRejectedValueOnce(
+                new Error('injected_finalization_loss'),
+            )
+            await expect(batchAdmissionService.admit(batchId, organizationId)).rejects.toThrow(
+                'injected_finalization_loss',
+            )
             const [execution] = await ownedExecutions(batchId)
             await settlements.persistResultAndIntention({
                 executionId: execution.executionId,
@@ -1200,27 +1304,41 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
 
         it('yields a 101-address group at its budget and resumes from the first incomplete persisted row', async () => {
             await schemaDataSource.getRepository(OrganizationCreditAccount).update({ organizationId }, { balance: 200 })
-            const emails = Array.from({ length: 101 }, (_, index) => `bulk-${String(index).padStart(3, '0')}@example.test`)
+            const emails = Array.from(
+                { length: 101 },
+                (_, index) => `bulk-${String(index).padStart(3, '0')}@example.test`,
+            )
             const batchId = await prepareBatch(emails)
             const record = batchAdmissions.recordAdmissionOutcome.bind(batchAdmissions)
             let outcomes = 0
             jest.spyOn(batchAdmissions, 'recordAdmissionOutcome').mockImplementation((...args) => {
                 outcomes += 1
                 // Interrupt just before the last budgeted write of the first advancement.
-                if (outcomes === 100) return Promise.reject(new Error('injected_last_write_interruption'))
+                if (outcomes === 100) {
+                    return Promise.reject(new Error('injected_last_write_interruption'))
+                }
                 return record(...args)
             })
 
             const reserveMany = jest.spyOn(credits, 'reserveMany')
 
-            await expect(batchAdmissionService.admit(batchId, organizationId)).rejects.toThrow('injected_last_write_interruption')
+            await expect(batchAdmissionService.admit(batchId, organizationId)).rejects.toThrow(
+                'injected_last_write_interruption',
+            )
             const first = await batchAdmissionService.admit(batchId, organizationId)
             expect(first).toEqual(expect.objectContaining({ kind: 'continuation' }))
             const released = await batchAdmissions.findById(batchId, organizationId)
-            expect(released).toEqual(expect.objectContaining({ admissionLeaseOwnerId: null, admissionLeaseExpiresAt: null }))
+            expect(released).toEqual(
+                expect.objectContaining({ admissionLeaseOwnerId: null, admissionLeaseExpiresAt: null }),
+            )
             const releasedFence = { ownerId: randomUUID(), generation: released!.admissionGeneration, now: currentTime }
             await expect(
-                batchAdmissions.renewAdmissionLease(batchId, organizationId, releasedFence, new Date(currentTime.getTime() + 1)),
+                batchAdmissions.renewAdmissionLease(
+                    batchId,
+                    organizationId,
+                    releasedFence,
+                    new Date(currentTime.getTime() + 1),
+                ),
             ).resolves.toBe(false)
 
             await admitToCompletion(batchId)
@@ -1237,12 +1355,23 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
 
         it('runs single executions before a bounded, fair group sweep and recovers a missing receipt next sweep', async () => {
             // Recovery sweeps every organization; retire earlier scenarios' groups in this disposable schema.
-            await schemaDataSource.getRepository(BatchAdmissionEntity).update({ finalizationState: 'preparing' }, { finalizationState: 'ready' })
+            await schemaDataSource
+                .getRepository(BatchAdmissionEntity)
+                .update({ finalizationState: 'preparing' }, { finalizationState: 'ready' })
             await schemaDataSource
                 .getRepository(VerificationExecutionEntity)
-                .update({ state: In(['funding_pending', 'queued', 'running', 'awaiting_retry', 'settling']) }, { state: 'canceled' })
-            const single = await admission.admit({ organizationId, email: 'single-first@example.test', deliveryMode: 'async' })
-            if (single.kind !== 'funded') throw new Error('Expected a funded single execution')
+                .update(
+                    { state: In(['funding_pending', 'queued', 'running', 'awaiting_retry', 'settling']) },
+                    { state: 'canceled' },
+                )
+            const single = await admission.admit({
+                organizationId,
+                email: 'single-first@example.test',
+                deliveryMode: 'async',
+            })
+            if (single.kind !== 'funded') {
+                throw new Error('Expected a funded single execution')
+            }
             const cached = await schemaDataSource.getRepository(EmailVerificationEntity).save(
                 schemaDataSource.getRepository(EmailVerificationEntity).create({
                     ...conclusiveResult({ email: 'fair@example.test', evidenceObservedAt: currentTime }),
@@ -1253,9 +1382,9 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
             const batchIds: string[] = []
             for (let index = 0; index < 101; index++) batchIds.push(await prepareBatch(['fair@example.test']))
             const order: string[] = []
-            runner.execute.mockImplementation(executionId => {
+            dispatcher.dispatch.mockImplementation(executionId => {
                 order.push(`single:${executionId}`)
-                return Promise.resolve({ kind: 'not-runnable' })
+                return Promise.resolve()
             })
             const admit = batchAdmissionService.admit.bind(batchAdmissionService)
             jest.spyOn(batchAdmissionService, 'admit').mockImplementation((batchId, org) => {
@@ -1263,7 +1392,9 @@ describeWithPostgres('Verification billing against a real, freshly-synced Postgr
                 return admit(batchId, org)
             })
             const insert = requests.insert.bind(requests)
-            jest.spyOn(requests, 'insert').mockRejectedValueOnce(new Error('injected_receipt_loss')).mockImplementation(insert)
+            jest.spyOn(requests, 'insert')
+                .mockRejectedValueOnce(new Error('injected_receipt_loss'))
+                .mockImplementation(insert)
 
             const first = await reconciler.reconcile(100)
 

@@ -18,16 +18,17 @@ import {
 } from '../../../application/ports/verification-settlement-store'
 import { BATCH_ADMISSION_RECOVERY, BatchAdmissionRecovery } from '../../../application/ports/batch-admission-recovery'
 import { VerificationSettlementService } from '../../../application/operations/verification-settlement.service'
-import { VerificationExecutionRunner } from '../../../application/operations/verification-execution-runner'
+import {
+    VERIFICATION_EXECUTION_DISPATCHER,
+    VerificationExecutionDispatcher,
+} from '../../../application/ports/verification-execution-dispatcher'
+import { VerificationExecutionModule } from '../verification-execution/verification-execution.module'
 import { VerificationReconciler } from '../../../application/operations/verification-reconciler'
 import {
     VERIFICATION_RECONCILIATION_SCHEDULER,
     VerificationReconciliationScheduler,
 } from '../../../application/delivery/reconciliation/verification-reconciliation-scheduler'
-import {
-    VERIFICATION_LEASE_TAKEOVER_GRACE_MS,
-    VERIFICATION_RECONCILER_INTERVAL_MS,
-} from '../../../application/operations/verification-execution-timing'
+import { VERIFICATION_RECONCILER_INTERVAL_MS } from '../../../application/operations/verification-execution-timing'
 import { BullVerificationReconciliationScheduler } from './bull-verification-reconciliation-scheduler'
 import { VerificationReconciliationProcessor } from './verification-reconciliation.processor'
 import { VERIFICATION_RECONCILIATION_QUEUE_NAME } from './verification-reconciliation-queue.config'
@@ -36,6 +37,7 @@ import { VERIFICATION_RECONCILIATION_QUEUE_NAME } from './verification-reconcili
     imports: [
         EmailVerificationCoreModule,
         BatchAdmissionModule,
+        VerificationExecutionModule,
         CreditsModule,
         BullModule.registerQueue({ name: VERIFICATION_RECONCILIATION_QUEUE_NAME }),
     ],
@@ -47,7 +49,7 @@ import { VERIFICATION_RECONCILIATION_QUEUE_NAME } from './verification-reconcili
                 VERIFICATION_REQUEST_STORE,
                 VERIFICATION_SETTLEMENT_STORE,
                 VerificationSettlementService,
-                VerificationExecutionRunner,
+                VERIFICATION_EXECUTION_DISPATCHER,
                 CreditReservationService,
                 VERIFICATION_CLOCK,
                 BATCH_ADMISSION_RECOVERY,
@@ -57,7 +59,7 @@ import { VERIFICATION_RECONCILIATION_QUEUE_NAME } from './verification-reconcili
                 requests: VerificationRequestStore,
                 settlements: VerificationSettlementStore,
                 settlementService: VerificationSettlementService,
-                runner: VerificationExecutionRunner,
+                dispatcher: VerificationExecutionDispatcher,
                 credits: CreditReservationService,
                 clock: VerificationClock,
                 batchAdmissionRecovery: BatchAdmissionRecovery,
@@ -67,10 +69,9 @@ import { VERIFICATION_RECONCILIATION_QUEUE_NAME } from './verification-reconcili
                     requests,
                     settlements,
                     settlementService,
-                    runner,
+                    dispatcher,
                     credits,
                     clock,
-                    VERIFICATION_LEASE_TAKEOVER_GRACE_MS,
                     batchAdmissionRecovery,
                 ),
         },

@@ -84,7 +84,7 @@ const statusModels = [
     },
 })
 @UseGuards(PermissionsGuard)
-@Controller('/verifyAsync')
+@Controller('/v1/email-verifications')
 export class AsyncEmailVerificationController {
     constructor(
         @Inject(ASYNC_EMAIL_VERIFICATION_SERVICE_TOKEN)
@@ -102,7 +102,9 @@ export class AsyncEmailVerificationController {
     })
     @ApiAcceptedResponse({
         type: VerifyAsyncResponseDto,
-        description: 'The operation was admitted. Use its ID to read status.',
+        description:
+            'The operation was admitted without waiting for verification. Follow Location to read status and result.',
+        headers: { Location: { description: 'The admitted verification resource.', schema: { type: 'string' } } },
     })
     @ApiBadRequestResponse({
         description: 'The email is missing/invalid, or the Idempotency-Key header is malformed or repeated.',
@@ -148,7 +150,8 @@ export class AsyncEmailVerificationController {
         },
     })
     @ApiTooManyRequestsResponse({
-        description: 'The organization submission rate limit, or a per-address terminal-inconclusive cooldown, was exceeded.',
+        description:
+            'The organization submission rate limit, or a per-address terminal-inconclusive cooldown, was exceeded.',
         schema: {
             type: 'object',
             properties: { statusCode: { type: 'integer', enum: [429] }, message: { type: 'string' } },
@@ -181,6 +184,7 @@ export class AsyncEmailVerificationController {
 
         switch (outcome.kind) {
             case 'accepted':
+                response.setHeader('Location', `/v1/email-verifications/${outcome.id}`)
                 return { id: outcome.id }
             case 'insufficient-funds':
                 throw new HttpException('insufficient_credits', HttpStatus.PAYMENT_REQUIRED)

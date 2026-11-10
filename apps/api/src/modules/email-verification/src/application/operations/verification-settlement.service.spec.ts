@@ -69,12 +69,15 @@ describe('VerificationSettlementService', () => {
         expect(emailAdministration.upsertEmail).not.toHaveBeenCalled()
     })
 
-    it('is a no-op replay when the intention is already confirmed', async () => {
+    it('repairs cache publication on a confirmed replay without recapturing credits', async () => {
         settlements.findIntention.mockResolvedValue(intention({ state: 'confirmed', confirmedAt: new Date() }))
         await service.settle(executionId, organizationId)
         expect(credits.capture).not.toHaveBeenCalled()
-        expect(settlements.confirmSettlement).not.toHaveBeenCalled()
-        expect(emailAdministration.upsertEmail).not.toHaveBeenCalled()
+        expect(settlements.confirmSettlement).toHaveBeenCalledWith(executionId, organizationId)
+        expect(emailAdministration.upsertEmail).toHaveBeenCalledWith(organizationId, 'person@example.test', {
+            exists: true,
+            lastVerificationId: 'result-1',
+        })
     })
 
     it('confirms after a replayed capture that already applied on a prior crash-interrupted attempt', async () => {
