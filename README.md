@@ -10,11 +10,14 @@ root API commands delegate to that workspace. The web application and MCP server
 
 ## Getting Started
 
-Use Node 24 and the pnpm version pinned in [`package.json`](package.json); Corepack selects that version.
+Use Node 26 and the pnpm version pinned in [`package.json`](package.json); Corepack selects that version.
+Install Corepack separately because Node 26 does not bundle it.
 
 ```sh
 git clone https://github.com/TupoSoft/LeadEmailFinder.git
 cd LeadEmailFinder
+npm install --global corepack@0.36.0
+corepack enable
 corepack pnpm install --frozen-lockfile
 ```
 

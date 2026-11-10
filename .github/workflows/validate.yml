@@ -29,9 +29,11 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
-      - name: Enable Corepack
-        run: corepack enable
+          node-version: 26
+      - name: Install and enable Corepack
+        run: |
+          npm install --global corepack@0.36.0
+          corepack enable
       - name: Locate pnpm store
         id: pnpm-store
         run: |
@@ -42,9 +44,9 @@ jobs:
         continue-on-error: true
         with:
           path: ${{ steps.pnpm-store.outputs.path }}
-          key: ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-api-${{ hashFiles('pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node26-pnpm${{ steps.pnpm-store.outputs.version }}-api-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-api-
+            ${{ runner.os }}-${{ runner.arch }}-node26-pnpm${{ steps.pnpm-store.outputs.version }}-api-
       - name: Install dependencies
         run: corepack pnpm --filter @tuposoft/lead-email-finder --filter @tuposoft/lead-email-finder-api... --filter @tuposoft/lead-email-finder-worker... --filter @tuposoft/lead-email-finder-api-client... --filter @tuposoft/lead-email-finder-mcp-server... install --frozen-lockfile
       - name: Lint
@@ -83,9 +85,11 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
-      - name: Enable Corepack
-        run: corepack enable
+          node-version: 26
+      - name: Install and enable Corepack
+        run: |
+          npm install --global corepack@0.36.0
+          corepack enable
       - name: Locate pnpm store
         id: pnpm-store
         run: |
@@ -96,9 +100,9 @@ jobs:
         continue-on-error: true
         with:
           path: ${{ steps.pnpm-store.outputs.path }}
-          key: ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-web-${{ hashFiles('pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-node26-pnpm${{ steps.pnpm-store.outputs.version }}-web-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-node24-pnpm${{ steps.pnpm-store.outputs.version }}-web-
+            ${{ runner.os }}-${{ runner.arch }}-node26-pnpm${{ steps.pnpm-store.outputs.version }}-web-
       - name: Install dependencies
         run: corepack pnpm --filter @tuposoft/lead-email-finder-web... install --frozen-lockfile
       - name: Lint web application
