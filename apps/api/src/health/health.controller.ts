@@ -1,7 +1,7 @@
 import { Controller, Get, SerializeOptions } from '@nestjs/common'
 import { HealthCheck, HealthCheckResult, HealthCheckService, TypeOrmHealthIndicator } from '@nestjs/terminus'
 import { ApiOkResponse, ApiOperation, ApiServiceUnavailableResponse } from '@nestjs/swagger'
-import type { SchemaObject } from '@nestjs/swagger/dist/interfaces/open-api-spec.interface'
+import type { SchemaObject } from '@nestjs/swagger'
 import { Public } from '@tuposoft/lead-email-finder/modules/auth'
 
 const POSTGRES_HEALTH_SCHEMA: SchemaObject = {

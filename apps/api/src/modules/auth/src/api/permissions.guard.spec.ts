@@ -41,7 +41,7 @@ describe('PermissionsGuard', () => {
         reflector.getAllAndOverride.mockReturnValue(['platform:admin'])
         rolePermissionPolicy.effectivePermissionsFor.mockReturnValue(['verification:run', 'verification:read'])
         const request: { authPrincipal?: AuthPrincipal } = {}
-        setAuthPrincipal(request as never, { membershipRole: 'member' } as AuthPrincipal)
+        setAuthPrincipal(request, { membershipRole: 'member' } as AuthPrincipal)
 
         expect(() => guard.canActivate(contextFor(request))).toThrow(ForbiddenException)
     })
@@ -50,7 +50,7 @@ describe('PermissionsGuard', () => {
         reflector.getAllAndOverride.mockReturnValue(['platform:admin', 'billing:read'])
         rolePermissionPolicy.effectivePermissionsFor.mockReturnValue(['billing:read'])
         const request: { authPrincipal?: AuthPrincipal } = {}
-        setAuthPrincipal(request as never, { membershipRole: 'owner' } as AuthPrincipal)
+        setAuthPrincipal(request, { membershipRole: 'owner' } as AuthPrincipal)
 
         expect(guard.canActivate(contextFor(request))).toBe(true)
     })
@@ -59,7 +59,7 @@ describe('PermissionsGuard', () => {
         reflector.getAllAndOverride.mockReturnValue(['verification:run'])
         rolePermissionPolicy.effectivePermissionsFor.mockReturnValue(['verification:run'])
         const request: { authPrincipal?: AuthPrincipal } = {}
-        setAuthPrincipal(request as never, { membershipRole: 'member' } as AuthPrincipal)
+        setAuthPrincipal(request, { membershipRole: 'member' } as AuthPrincipal)
 
         guard.canActivate(contextFor(request))
 

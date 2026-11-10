@@ -2,7 +2,6 @@ import {
     CreditReservationAdmission,
     CreditReservationRecord,
     CreditReservationSettlement,
-    CreditReservationState,
     CreditReservationStore,
 } from '@tuposoft/lead-email-finder/modules/identity'
 import {
@@ -20,7 +19,7 @@ function record(overrides: Partial<CreditReservationRecord> = {}): CreditReserva
     return {
         operationId: 'op-1',
         amount: 3,
-        state: 'reserved' as CreditReservationState,
+        state: 'reserved',
         createdAt,
         updatedAt,
         settledAt: null,

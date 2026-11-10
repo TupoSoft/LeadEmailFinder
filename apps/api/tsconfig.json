@@ -5,35 +5,45 @@
     },
     "include": ["src/**/*.ts"],
     "compilerOptions": {
-        "baseUrl": "./",
+        "module": "NodeNext",
+        "moduleResolution": "NodeNext",
+        "types": ["node", "jest"],
         "outDir": "./dist",
         "rootDir": "./src",
         "paths": {
-            "@tuposoft/lead-email-finder/better-auth": ["src/libs/better-auth/src"],
-            "@tuposoft/lead-email-finder/common": ["src/libs/common/src"],
-            "@tuposoft/lead-email-finder/common/*": ["src/libs/common/src/*"],
-            "@tuposoft/lead-email-finder/config": ["src/libs/config/src"],
-            "@tuposoft/lead-email-finder/config/*": ["src/libs/config/src/*"],
-            "@tuposoft/lead-email-finder/keycloak-admin-http": ["src/libs/keycloak-admin-http/src"],
-            "@tuposoft/lead-email-finder/keycloak-admin-http/*": ["src/libs/keycloak-admin-http/src/*"],
-            "@tuposoft/lead-email-finder/redis": ["src/libs/redis/src"],
-            "@tuposoft/lead-email-finder/redis/*": ["src/libs/redis/src/*"],
-            "@tuposoft/lead-email-finder/modules/auth": ["src/modules/auth/src"],
-            "@tuposoft/lead-email-finder/modules/bff-session": ["src/modules/bff-session/src"],
-            "@tuposoft/lead-email-finder/modules/credits": ["src/modules/credits/src"],
-            "@tuposoft/lead-email-finder/modules/credits/*": ["src/modules/credits/src/*"],
-            "@tuposoft/lead-email-finder/modules/email-verification": ["src/modules/email-verification/src"],
-            "@tuposoft/lead-email-finder/modules/email-verification/*": ["src/modules/email-verification/src/*"],
-            "@tuposoft/lead-email-finder/modules/identity": ["src/modules/identity/src"],
-            "@tuposoft/lead-email-finder/modules/identity/*": ["src/modules/identity/src/*"],
-            "@tuposoft/lead-email-finder/modules/organization-onboarding": ["src/modules/organization-onboarding/src"],
-            "@tuposoft/lead-email-finder/modules/organization-onboarding/*": ["src/modules/organization-onboarding/src/*"],
-            "@tuposoft/lead-email-finder/modules/service-client-management": ["src/modules/service-client-management/src"],
-            "@tuposoft/lead-email-finder/modules/service-client-management/*": ["src/modules/service-client-management/src/*"],
-            "@tuposoft/lead-email-finder/modules/payments": ["src/modules/payments/src"],
-            "@tuposoft/lead-email-finder/modules/payments/*": ["src/modules/payments/src/*"],
-            "@tuposoft/lead-email-finder/modules/proxy": ["src/modules/proxy/src"],
-            "@tuposoft/lead-email-finder/modules/proxy/*": ["src/modules/proxy/src/*"]
+            "@tuposoft/lead-email-finder/better-auth": ["./src/libs/better-auth/src"],
+            "@tuposoft/lead-email-finder/common": ["./src/libs/common/src"],
+            "@tuposoft/lead-email-finder/common/*": ["./src/libs/common/src/*"],
+            "@tuposoft/lead-email-finder/config": ["./src/libs/config/src"],
+            "@tuposoft/lead-email-finder/config/*": ["./src/libs/config/src/*"],
+            "@tuposoft/lead-email-finder/keycloak-admin-http": ["./src/libs/keycloak-admin-http/src"],
+            "@tuposoft/lead-email-finder/keycloak-admin-http/*": ["./src/libs/keycloak-admin-http/src/*"],
+            "@tuposoft/lead-email-finder/redis": ["./src/libs/redis/src"],
+            "@tuposoft/lead-email-finder/redis/*": ["./src/libs/redis/src/*"],
+            "@tuposoft/lead-email-finder/modules/auth": ["./src/modules/auth/src"],
+            "@tuposoft/lead-email-finder/modules/bff-session": ["./src/modules/bff-session/src"],
+            "@tuposoft/lead-email-finder/modules/credits": ["./src/modules/credits/src"],
+            "@tuposoft/lead-email-finder/modules/credits/*": ["./src/modules/credits/src/*"],
+            "@tuposoft/lead-email-finder/modules/email-verification": ["./src/modules/email-verification/src"],
+            "@tuposoft/lead-email-finder/modules/email-verification/*": ["./src/modules/email-verification/src/*"],
+            "@tuposoft/lead-email-finder/modules/identity": ["./src/modules/identity/src"],
+            "@tuposoft/lead-email-finder/modules/identity/*": ["./src/modules/identity/src/*"],
+            "@tuposoft/lead-email-finder/modules/organization-onboarding": [
+                "./src/modules/organization-onboarding/src"
+            ],
+            "@tuposoft/lead-email-finder/modules/organization-onboarding/*": [
+                "./src/modules/organization-onboarding/src/*"
+            ],
+            "@tuposoft/lead-email-finder/modules/service-client-management": [
+                "./src/modules/service-client-management/src"
+            ],
+            "@tuposoft/lead-email-finder/modules/service-client-management/*": [
+                "./src/modules/service-client-management/src/*"
+            ],
+            "@tuposoft/lead-email-finder/modules/payments": ["./src/modules/payments/src"],
+            "@tuposoft/lead-email-finder/modules/payments/*": ["./src/modules/payments/src/*"],
+            "@tuposoft/lead-email-finder/modules/proxy": ["./src/modules/proxy/src"],
+            "@tuposoft/lead-email-finder/modules/proxy/*": ["./src/modules/proxy/src/*"]
         }
     }
 }

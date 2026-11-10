@@ -23,7 +23,7 @@ function admissionEntity(overrides: Partial<BatchAdmissionEntity> = {}): BatchAd
         createdAt: new Date(),
         updatedAt: new Date(),
         ...overrides,
-    } as BatchAdmissionEntity
+    }
 }
 
 describe('TypeOrmBatchAdmissionStore', () => {

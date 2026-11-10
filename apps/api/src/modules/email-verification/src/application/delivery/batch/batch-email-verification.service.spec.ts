@@ -334,7 +334,7 @@ describe('BatchEmailVerificationService', () => {
 
             jobs.find.mockResolvedValueOnce(
                 handle({
-                    data: data as BatchJobHandle['data'],
+                    data: data,
                     counts: jest.fn().mockResolvedValue({ processed, unprocessed }),
                 }),
             )

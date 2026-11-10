@@ -166,7 +166,10 @@ function sendRawRequest(port: number, target: string): Promise<RawResponse> {
             socket.destroy()
             reject(new Error('raw request timed out'))
         })
-        socket.on('data', chunk => chunks.push(chunk))
+        socket.on('data', chunk => {
+            const buffer = typeof chunk === 'string' ? Buffer.from(chunk) : chunk
+            chunks.push(buffer)
+        })
         socket.on('error', reject)
         socket.on('end', () => {
             const raw = Buffer.concat(chunks).toString('utf8')

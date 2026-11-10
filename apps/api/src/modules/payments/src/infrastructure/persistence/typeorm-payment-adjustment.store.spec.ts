@@ -123,7 +123,7 @@ describe('TypeOrmPaymentAdjustmentStore', () => {
     })
 
     it('keeps an adjustment retryable until the original purchase grant is complete', async () => {
-        manager.findOne.mockResolvedValue({ ...purchase, creditsGrantedAt: null } as CreditPurchase)
+        manager.findOne.mockResolvedValue({ ...purchase, creditsGrantedAt: null })
 
         await expect(store.claim(debitInput)).rejects.toBeInstanceOf(PaymentAdjustmentPurchaseNotReadyError)
 
@@ -131,7 +131,7 @@ describe('TypeOrmPaymentAdjustmentStore', () => {
     })
 
     it('keeps an adjustment retryable until the paid provider total is known', async () => {
-        manager.findOne.mockResolvedValue({ ...purchase, providerTotalMinor: null } as CreditPurchase)
+        manager.findOne.mockResolvedValue({ ...purchase, providerTotalMinor: null })
 
         await expect(store.claim(debitInput)).rejects.toBeInstanceOf(PaymentAdjustmentBasisMissingError)
 
@@ -174,7 +174,7 @@ describe('TypeOrmPaymentAdjustmentStore', () => {
 
     it('uses the provider total rather than the catalog amount for partial accounting', async () => {
         manager.findOne
-            .mockResolvedValueOnce({ ...purchase, providerTotalMinor: 615 } as CreditPurchase)
+            .mockResolvedValueOnce({ ...purchase, providerTotalMinor: 615 })
             .mockResolvedValueOnce(null)
 
         await expect(

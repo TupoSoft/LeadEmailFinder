@@ -88,7 +88,7 @@ describe('JoseIdTokenVerifier with a reachable JWKS endpoint and unreachable pub
         ['missing expiry', { exp: undefined }],
         ['nonce', { nonce: 'another-login' }],
     ])('continues to reject an invalid %s', async (_name, overrides) => {
-        const token = await signToken(overrides as JWTPayload)
+        const token = await signToken(overrides)
 
         await expect(verifier.verify(token, 'login-nonce')).rejects.toThrow(IdTokenVerificationFailedError)
     })
@@ -103,7 +103,7 @@ describe('JoseIdTokenVerifier with a reachable JWKS endpoint and unreachable pub
         ['empty subject', { sub: '' }],
         ['non-string email', { email: ['person@example.test'] }],
     ])('rejects a malformed %s claim shape', async (_name, overrides) => {
-        const token = await signToken(overrides as JWTPayload)
+        const token = await signToken(overrides)
 
         await expect(verifier.verify(token, 'login-nonce')).rejects.toThrow(IdTokenVerificationFailedError)
     })

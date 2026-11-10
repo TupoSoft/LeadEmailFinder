@@ -58,19 +58,19 @@ jobs:
       - name: Test empty-database synchronization
         env:
           TEST_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/lef_identity_test
-        run: corepack pnpm test -- identity-schema.integration.spec.ts --runInBand
+        run: corepack pnpm test identity-schema.integration.spec.ts --runInBand
       - name: Test credit account debits against a real database
         env:
           TEST_CREDITS_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/lef_identity_test
-        run: corepack pnpm test -- credits.service.integration.spec.ts --runInBand
+        run: corepack pnpm test credits.service.integration.spec.ts --runInBand
       - name: Test payment adjustments against a real database
         env:
           TEST_PAYMENT_WEBHOOK_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/lef_identity_test
-        run: corepack pnpm test -- payment-event.handler.integration.spec.ts --runInBand
+        run: corepack pnpm test payment-event.handler.integration.spec.ts --runInBand
       - name: Test email-verification persistence stores against a real database
         env:
           TEST_EMAIL_VERIFICATION_PERSISTENCE_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/lef_identity_test
-        run: corepack pnpm test -- typeorm-stores-organization-isolation.integration.spec.ts --runInBand
+        run: corepack pnpm test typeorm-stores-organization-isolation.integration.spec.ts --runInBand
       - name: Test organization directory PostgreSQL page boundaries
         env:
           TEST_ORGANIZATION_DIRECTORY_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/lef_identity_test

@@ -67,7 +67,7 @@ describe('TypeOrmInvitationAcceptanceStore', () => {
             email: 'invitee@example.test',
         } as ExternalIdentity)
         managerMock.findOneByOrFail.mockResolvedValue(
-            invitationFixture() as unknown as OrganizationInvitation,
+            invitationFixture(),
         )
     })
 
@@ -113,7 +113,7 @@ describe('TypeOrmInvitationAcceptanceStore', () => {
 
         it('returns already-accepted and commits when a concurrent acceptance already won', async () => {
             managerMock.findOneByOrFail.mockResolvedValue(
-                invitationFixture({ status: 'accepted', role: 'admin' }) as unknown as OrganizationInvitation,
+                invitationFixture({ status: 'accepted', role: 'admin' }),
             )
 
             const outcome = await store.begin(invitationFixture(), issuer, 'keycloak-subject-1')
@@ -171,9 +171,9 @@ describe('TypeOrmInvitationAcceptanceStore', () => {
         it('complete() returns the winning racer without a second write when the conditional update loses', async () => {
             managerMock.update.mockResolvedValue({ affected: 0 } as never)
             managerMock.findOneByOrFail
-                .mockResolvedValueOnce(invitationFixture() as unknown as OrganizationInvitation)
+                .mockResolvedValueOnce(invitationFixture())
                 .mockResolvedValueOnce(
-                    invitationFixture({ status: 'accepted', role: 'member' }) as unknown as OrganizationInvitation,
+                    invitationFixture({ status: 'accepted', role: 'member' }),
                 )
 
             const outcome = await store.begin(invitationFixture(), issuer, 'keycloak-subject-1')
