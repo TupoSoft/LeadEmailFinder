@@ -1,4 +1,5 @@
 import { DnsService, IDnsService } from './libs/dns/src'
+import { LRUCache } from 'lru-cache'
 import { getDomain } from 'tldts'
 import {
     CompletedVerificationResult,
@@ -29,7 +30,10 @@ const FRESHNESS_MS = 24 * 60 * 60 * 1000
 const CONTROL_LOCAL_PART = 'tbbjjmqeykhtazzwggmzrxterzetrwgwxnavfgnjkdunvgziak'
 
 export class MailboxVerifier {
-    private readonly cache = new Map<string, CacheEntry>()
+    private readonly cache = new LRUCache<string, CacheEntry>({
+        max: 10_000,
+        ttl: FRESHNESS_MS,
+    })
 
     constructor(
         private readonly identity: SmtpIdentity,
@@ -116,11 +120,10 @@ export class MailboxVerifier {
     private async probe(organizationId: string, email: string, signal: AbortSignal): Promise<ProbeResult> {
         const key = `${organizationId}\0${email}\0v1`
         const cached = this.cache.get(key)
+        const now = Date.now()
 
-        if (cached && cached.observedAt <= Date.now() && Date.now() - cached.observedAt < FRESHNESS_MS) {
-            this.cache.delete(key)
-            this.cache.set(key, cached)
-
+        // Evidence age is authoritative even when the cache's monotonic clock differs.
+        if (cached && cached.observedAt <= now && now - cached.observedAt < FRESHNESS_MS) {
             let evidence: MailboxEvidence = NO_MAILBOX_EVIDENCE
             if (cached.result.evidence.kind !== 'none') {
                 evidence = { ...cached.result.evidence, origin: 'stored' }
@@ -181,14 +184,16 @@ export class MailboxVerifier {
                     last = this.fromObservation(observation, exchange)
 
                     if (last.evidence.kind !== 'none') {
-                        this.cache.set(key, {
-                            observedAt: last.evidence.observedAt.getTime(),
-                            result: last,
-                        })
+                        const observedAt = last.evidence.observedAt.getTime()
+                        const evidenceAgeMilliseconds = Date.now() - observedAt
+                        const remainingTtl = FRESHNESS_MS - evidenceAgeMilliseconds
 
-                        if (this.cache.size > 10_000) {
-                            const oldestKey = this.cache.keys().next().value!
-                            this.cache.delete(oldestKey)
+                        if (evidenceAgeMilliseconds >= 0 && remainingTtl > 0) {
+                            this.cache.set(
+                                key,
+                                { observedAt, result: last },
+                                { ttl: remainingTtl },
+                            )
                         }
                     }
 
