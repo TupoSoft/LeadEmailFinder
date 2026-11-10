@@ -4,7 +4,7 @@ info:
     seq: 9
 http:
     method: GET
-    url: '{{baseUrl}}/verifyAsync/{{asyncJobId}}'
+    url: '{{baseUrl}}/v1/email-verifications/{{asyncJobId}}'
     headers:
         - name: Authorization
           value: 'Bearer {{customerToken}}'

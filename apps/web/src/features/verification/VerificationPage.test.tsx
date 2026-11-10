@@ -37,7 +37,7 @@ const account: CurrentAccount = {
     grantableServiceClientPermissions: [],
 }
 const jobId = '12345678-1234-4234-8234-123456789012'
-const createPath = '/verifyAsync'
+const createPath = '/v1/email-verifications'
 const statusPath = `${createPath}/${jobId}`
 const formRoute = '/app/verifications/new'
 const jobRoute = `/app/verifications/${jobId}`

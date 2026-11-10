@@ -12,7 +12,7 @@ import { VERIFICATION_EXECUTION_STORE } from '../application/ports/verification-
 import { VERIFICATION_REQUEST_STORE } from '../application/ports/verification-request-store'
 import { VERIFICATION_RESULT_CACHE_READER } from '../application/ports/verification-result-cache-reader'
 import { VERIFICATION_SETTLEMENT_STORE } from '../application/ports/verification-settlement-store'
-import { VerificationExecutionRunner } from '../application/operations/verification-execution-runner'
+import { CloudflareVerificationQueues } from './queues/verification-execution/cloudflare-verification-queues'
 import { VerificationReconciler } from '../application/operations/verification-reconciler'
 import { VerificationSettlementService } from '../application/operations/verification-settlement.service'
 import { BatchAdmissionModule } from './batch-admission.module'
@@ -21,7 +21,7 @@ import { TypeOrmBatchAdmissionStore } from './persistence/typeorm-batch-admissio
 import { BatchEmailVerificationModule } from './queues/batch-verification/batch-email-verification.module'
 import { VerificationReconciliationModule } from './queues/verification-reconciliation/verification-reconciliation.module'
 
-// The real core and credits modules need DNS, proxies, and PostgreSQL. These stubs export the same tokens, so the
+// The real core and credits modules need PostgreSQL. These stubs export the same tokens, so the
 // admission and reconciliation modules compose their actual providers against them.
 jest.mock('./email-verification-core.module', () => {
     const { Module: NestModule } = jest.requireActual<typeof import('@nestjs/common')>('@nestjs/common')
@@ -41,16 +41,12 @@ jest.mock('./email-verification-core.module', () => {
     const { VerificationSettlementService: Settlement } = jest.requireActual<
         typeof import('../application/operations/verification-settlement.service')
     >('../application/operations/verification-settlement.service')
-    const { VerificationExecutionRunner: Runner } = jest.requireActual<
-        typeof import('../application/operations/verification-execution-runner')
-    >('../application/operations/verification-execution-runner')
     const providers = [
         ...ports.map(port => ({
             provide: port,
             useValue: { now: () => new Date(0), pageNonterminal: () => Promise.resolve([]) },
         })),
         { provide: Settlement, useValue: {} },
-        { provide: Runner, useValue: {} },
     ]
     class EmailVerificationCoreModule {}
     NestModule({ providers, exports: providers.map(provider => provider.provide) })(EmailVerificationCoreModule)
@@ -109,7 +105,10 @@ describe(BatchAdmissionModule.name, () => {
     })
 
     async function compile(module: object): Promise<TestingModule> {
-        const compiled = await Test.createTestingModule({ imports: [DataSourceStubModule, module as never] }).compile()
+        const compiled = await Test.createTestingModule({ imports: [DataSourceStubModule, module as never] })
+            .overrideProvider(CloudflareVerificationQueues)
+            .useValue({})
+            .compile()
         modules.push(compiled)
         return compiled
     }
@@ -160,7 +159,6 @@ describe(BatchAdmissionModule.name, () => {
             VERIFICATION_RESULT_CACHE_READER,
             VERIFICATION_COOLDOWN_READER,
             VerificationSettlementService,
-            VerificationExecutionRunner,
             CreditReservationService,
         ]) {
             expect(compiled.get(token, { strict: false })).toBeDefined()

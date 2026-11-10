@@ -1,7 +1,3 @@
-/**
- * Generated file. Do not edit.
- */
-
 export interface paths {
     "/credits/{organizationId}": {
         parameters: {
@@ -168,6 +164,40 @@ export interface paths {
         put?: never;
         /** @description Starts a purchase for the authenticated organization. Browser sessions require a matching application Origin (or Referer) and the decoded lef_csrf_token cookie in x-csrf-token. OIDC bearer credentials are also supported. */
         post: operations["CreditPurchaseController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/email-verifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Admits one email for the authenticated organization through the durable admission stack. A fresh, uncached submission reserves one credit; a cached or shared result costs nothing. An optional canonical lowercase UUIDv7 Idempotency-Key header lets a caller safely retry an uncertain submission. Browser sessions require same-origin mutation protection. */
+        post: operations["AsyncEmailVerificationController_verifyAsync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/email-verifications/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Reads an organization-owned operation without debit or submission. Missing, expired, and foreign operations are concealed with the same 404 response. */
+        get: operations["AsyncEmailVerificationController_getAsyncVerificationState"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -472,40 +502,6 @@ export interface paths {
          * @description Requires platform:admin. Cookie mutations require a valid Origin and CSRF header. Repeated identical reports converge. Read the proxy afterward to see its current blacklist array. Removal is unsupported.
          */
         post: operations["ProxyController_reportProxyBlacklist"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/verifyAsync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Admits one email for the authenticated organization through the durable admission stack. A fresh, uncached submission reserves one credit; a cached or shared result costs nothing. An optional canonical lowercase UUIDv7 Idempotency-Key header lets a caller safely retry an uncertain submission. Browser sessions require same-origin mutation protection. */
-        post: operations["AsyncEmailVerificationController_verifyAsync"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/verifyAsync/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description Reads an organization-owned operation without debit or submission. Missing, expired, and foreign operations are concealed with the same 404 response. */
-        get: operations["AsyncEmailVerificationController_getAsyncVerificationState"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1626,6 +1622,203 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    AsyncEmailVerificationController_verifyAsync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyAsyncRequestBodyDto"];
+            };
+        };
+        responses: {
+            /** @description The operation was admitted without waiting for verification. Follow Location to read status and result. */
+            202: {
+                headers: {
+                    /** @description The admitted verification resource. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerifyAsyncResponseDto"];
+                };
+            };
+            /** @description The email is missing/invalid, or the Idempotency-Key header is malformed or repeated. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error?: string;
+                        message: string;
+                        /** @enum {integer} */
+                        statusCode: 400;
+                    };
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "authentication_required";
+                    };
+                };
+            };
+            /** @description The organization has insufficient credits; no execution was funded. */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        message: "insufficient_credits";
+                        /** @enum {integer} */
+                        statusCode: 402;
+                    };
+                };
+            };
+            /** @description The required verification permission or browser mutation protection is missing. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code?: string;
+                        error?: string;
+                        message?: string;
+                        /** @example 403 */
+                        statusCode?: number;
+                    };
+                };
+            };
+            /** @description The supplied Idempotency-Key was already used for a different address or delivery mode. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message?: string;
+                        /** @enum {integer} */
+                        statusCode?: 409;
+                    };
+                };
+            };
+            /** @description The supplied Idempotency-Key is more than 24 hours old. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message?: string;
+                        /** @enum {integer} */
+                        statusCode?: 410;
+                    };
+                };
+            };
+            /** @description The organization submission rate limit, or a per-address terminal-inconclusive cooldown, was exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        message?: string;
+                        /** @enum {integer} */
+                        statusCode?: 429;
+                    };
+                };
+            };
+        };
+    };
+    AsyncEmailVerificationController_getAsyncVerificationState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A sanitized operation status. Unavailable means a trustworthy outcome cannot be reported. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AsyncVerificationQueuedResponseDto"] | components["schemas"]["AsyncVerificationRunningResponseDto"] | components["schemas"]["AsyncVerificationCompletedResponseDto"] | components["schemas"]["AsyncVerificationFailedResponseDto"] | components["schemas"]["AsyncVerificationUnavailableResponseDto"];
+                };
+            };
+            /** @description The operation ID is not a UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error?: string;
+                        message: string[];
+                        /** @enum {integer} */
+                        statusCode: 400;
+                    };
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "authentication_required";
+                    };
+                };
+            };
+            /** @description The required verification permission or browser mutation protection is missing. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code?: string;
+                        error?: string;
+                        message?: string;
+                        /** @example 403 */
+                        statusCode?: number;
+                    };
+                };
+            };
+            /** @description No accessible operation matches the ID. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error?: string;
+                        message: string;
+                        /** @enum {integer} */
+                        statusCode: 404;
+                    };
+                };
             };
         };
     };
@@ -2787,201 +2980,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-        };
-    };
-    AsyncEmailVerificationController_verifyAsync: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["VerifyAsyncRequestBodyDto"];
-            };
-        };
-        responses: {
-            /** @description The operation was admitted. Use its ID to read status. */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VerifyAsyncResponseDto"];
-                };
-            };
-            /** @description The email is missing/invalid, or the Idempotency-Key header is malformed or repeated. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        error?: string;
-                        message: string;
-                        /** @enum {integer} */
-                        statusCode: 400;
-                    };
-                };
-            };
-            /** @description Authentication is required. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** @enum {string} */
-                        code: "authentication_required";
-                    };
-                };
-            };
-            /** @description The organization has insufficient credits; no execution was funded. */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** @enum {string} */
-                        message: "insufficient_credits";
-                        /** @enum {integer} */
-                        statusCode: 402;
-                    };
-                };
-            };
-            /** @description The required verification permission or browser mutation protection is missing. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        code?: string;
-                        error?: string;
-                        message?: string;
-                        /** @example 403 */
-                        statusCode?: number;
-                    };
-                };
-            };
-            /** @description The supplied Idempotency-Key was already used for a different address or delivery mode. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        message?: string;
-                        /** @enum {integer} */
-                        statusCode?: 409;
-                    };
-                };
-            };
-            /** @description The supplied Idempotency-Key is more than 24 hours old. */
-            410: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        message?: string;
-                        /** @enum {integer} */
-                        statusCode?: 410;
-                    };
-                };
-            };
-            /** @description The organization submission rate limit, or a per-address terminal-inconclusive cooldown, was exceeded. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        message?: string;
-                        /** @enum {integer} */
-                        statusCode?: 429;
-                    };
-                };
-            };
-        };
-    };
-    AsyncEmailVerificationController_getAsyncVerificationState: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description A sanitized operation status. Unavailable means a trustworthy outcome cannot be reported. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AsyncVerificationQueuedResponseDto"] | components["schemas"]["AsyncVerificationRunningResponseDto"] | components["schemas"]["AsyncVerificationCompletedResponseDto"] | components["schemas"]["AsyncVerificationFailedResponseDto"] | components["schemas"]["AsyncVerificationUnavailableResponseDto"];
-                };
-            };
-            /** @description The operation ID is not a UUID. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        error?: string;
-                        message: string[];
-                        /** @enum {integer} */
-                        statusCode: 400;
-                    };
-                };
-            };
-            /** @description Authentication is required. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** @enum {string} */
-                        code: "authentication_required";
-                    };
-                };
-            };
-            /** @description The required verification permission or browser mutation protection is missing. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        code?: string;
-                        error?: string;
-                        message?: string;
-                        /** @example 403 */
-                        statusCode?: number;
-                    };
-                };
-            };
-            /** @description No accessible operation matches the ID. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        error?: string;
-                        message: string;
-                        /** @enum {integer} */
-                        statusCode: 404;
-                    };
-                };
             };
         };
     };

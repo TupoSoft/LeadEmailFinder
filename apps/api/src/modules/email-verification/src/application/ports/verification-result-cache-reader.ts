@@ -8,8 +8,8 @@ export interface VerificationResultCacheCandidate {
 }
 
 /** Reads the latest verification result for one organization/address, for the admission service to test with
- *  the pure `isCachedResultUsable`. Distinct from the existing UUID-keyed `VerificationResultReader`, which
- *  serves the unrelated `GET /verifications/:id` route. */
+ *  the pure `isCachedResultUsable`. Distinct from the UUID-keyed reader used to assemble an operation
+ *  response after settlement. */
 export interface VerificationResultCacheReader {
     findLatestCandidate(
         organizationId: string,

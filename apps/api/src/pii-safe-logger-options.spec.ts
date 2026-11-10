@@ -33,11 +33,14 @@ describe('sanitizeRequestTarget', () => {
         ['/v1/organizations/%69nvitations/private-token/accept', '/v1/organizations/%69nvitations/:sensitive/accept'],
         ['/accept-invitation/private%252Dtoken', '/accept-invitation/:sensitive'],
         ['/v1/organizations/invitations%2Fprivate-token', '/v1/organizations/:sensitive'],
-        ['/v1/organizations%252Finvitations/private-token/accept', '/v1/organizations%252Finvitations/:sensitive/accept'],
+        [
+            '/v1/organizations%252Finvitations/private-token/accept',
+            '/v1/organizations%252Finvitations/:sensitive/accept',
+        ],
         ['/accept-invitation%252Fprivate-token', '/:sensitive'],
         ['/v1/organizations/invitations', '/v1/organizations/invitations'],
         ['/encoded/non%20sensitive', '/encoded/non%20sensitive'],
-        ['/verifications/private-domain.test', '/verifications/:sensitive'],
+        ['/v1/email-verifications/private-domain.test', '/v1/email-verifications/:sensitive'],
         ['/verifyAsync/private-credential', '/verifyAsync/:sensitive'],
         ['/verifyBatch/private-domain.test/results', '/verifyBatch/:sensitive/results'],
         ['/verifications%2Fprivate-domain.test', '/:sensitive'],
@@ -51,8 +54,14 @@ describe('sanitizeRequestTarget', () => {
         ['/verifyAsync/3b6e879d-b4ed-4a44-b121-710f16ee92c3%2Fprivate-marker', '/verifyAsync/:sensitive'],
         ['/api%2FverifyBatch/csv%252Fprivate-marker', '/api%2FverifyBatch/:sensitive'],
         ['/verifyAsync%2F3b6e879d-b4ed-4a44-b121-710f16ee92c3', '/verifyAsync%2F3b6e879d-b4ed-4a44-b121-710f16ee92c3'],
-        ['/api%2Fverifications/3b6e879d-b4ed-4a44-b121-710f16ee92c3', '/api%2Fverifications/3b6e879d-b4ed-4a44-b121-710f16ee92c3'],
-        ['/verifications/3b6e879d-b4ed-4a44-b121-710f16ee92c3', '/verifications/3b6e879d-b4ed-4a44-b121-710f16ee92c3'],
+        [
+            '/api%2Fverifications/3b6e879d-b4ed-4a44-b121-710f16ee92c3',
+            '/api%2Fverifications/3b6e879d-b4ed-4a44-b121-710f16ee92c3',
+        ],
+        [
+            '/v1/email-verifications/3b6e879d-b4ed-4a44-b121-710f16ee92c3',
+            '/v1/email-verifications/3b6e879d-b4ed-4a44-b121-710f16ee92c3',
+        ],
     ])('sanitizes %s as %s', (rawUrl, expected) => {
         expect(sanitizeRequestTarget(rawUrl)).toBe(expected)
     })
@@ -164,7 +173,11 @@ describe('createPiiSafePinoHttpOptions', () => {
 
         const error = new Error('private message')
         Object.defineProperties(error, {
-            constructor: { get: () => { throw new Error('private constructor') } },
+            constructor: {
+                get: () => {
+                    throw new Error('private constructor')
+                },
+            },
         })
 
         expect(serializer(error)).toEqual({ type: 'Error' })

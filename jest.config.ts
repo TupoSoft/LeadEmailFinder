@@ -22,8 +22,6 @@ const config: Config = {
         '^(\\.{1,2}/.*)\\.js$': '$1',
         '@tuposoft/lead-email-finder/redis/(.*)': '<rootDir>/apps/api/src/libs/redis/src/$1',
         '@tuposoft/lead-email-finder/keycloak-admin-http/(.*)': '<rootDir>/apps/api/src/libs/keycloak-admin-http/src/$1',
-        '@tuposoft/lead-email-finder/socket/(.*)': '<rootDir>/apps/api/src/libs/socket/src/$1',
-        '@tuposoft/lead-email-finder/dns/(.*)': '<rootDir>/apps/api/src/libs/dns/src/$1',
         '@tuposoft/lead-email-finder/common/(.*)': '<rootDir>/apps/api/src/libs/common/src/$1',
         '@tuposoft/lead-email-finder/modules/credits/(.*)': '<rootDir>/apps/api/src/modules/credits/src/$1',
         '@tuposoft/lead-email-finder/modules/email-verification/(.*)':
@@ -39,8 +37,6 @@ const config: Config = {
         '@tuposoft/lead-email-finder/better-auth': '<rootDir>/apps/api/src/libs/better-auth/src',
         '@tuposoft/lead-email-finder/redis': '<rootDir>/apps/api/src/libs/redis/src',
         '@tuposoft/lead-email-finder/keycloak-admin-http': '<rootDir>/apps/api/src/libs/keycloak-admin-http/src',
-        '@tuposoft/lead-email-finder/socket': '<rootDir>/apps/api/src/libs/socket/src',
-        '@tuposoft/lead-email-finder/dns': '<rootDir>/apps/api/src/libs/dns/src',
         '@tuposoft/lead-email-finder/common': '<rootDir>/apps/api/src/libs/common/src',
         '@tuposoft/lead-email-finder/modules/auth': '<rootDir>/apps/api/src/modules/auth/src',
         '@tuposoft/lead-email-finder/modules/bff-session': '<rootDir>/apps/api/src/modules/bff-session/src',

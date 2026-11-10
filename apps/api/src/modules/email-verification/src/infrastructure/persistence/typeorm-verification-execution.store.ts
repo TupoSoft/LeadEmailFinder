@@ -13,6 +13,7 @@ import { lockFencedAdmission } from './batch-admission-fence'
 import { VerificationExecutionEntity } from './typeorm/verification-execution.entity'
 import { VerificationRequestEntity } from './typeorm/verification-request.entity'
 import { VerificationSettlementIntentionEntity } from './typeorm/verification-settlement-intention.entity'
+import { enqueueVerificationAttempt } from './verification-command-outbox'
 
 const NONTERMINAL_STATES = ['funding_pending', 'queued', 'running', 'awaiting_retry', 'settling'] as const
 const POSTGRES_UNIQUE_VIOLATION = '23505'
@@ -62,7 +63,16 @@ export class TypeOrmVerificationExecutionStore implements VerificationExecutionS
     ): Promise<ClaimAddressOutcome> {
         return this.dataSource.transaction(async manager => {
             await lockOrganizationAdmissions(manager, organizationId)
-            return this.claimLocked(manager, organizationId, normalizedAddress, payerRequestId, newExecutionId, deadlineAt, isCandidateUsable, fundingOwner)
+            return this.claimLocked(
+                manager,
+                organizationId,
+                normalizedAddress,
+                payerRequestId,
+                newExecutionId,
+                deadlineAt,
+                isCandidateUsable,
+                fundingOwner,
+            )
         })
     }
 
@@ -80,11 +90,22 @@ export class TypeOrmVerificationExecutionStore implements VerificationExecutionS
             await lockOrganizationAdmissions(manager, organizationId)
             // Lock order: organization advisory lock, then batch group row, then execution row.
             const admission = await lockFencedAdmission(manager, batchId, organizationId, fence, 'read')
-            if (admission?.state !== 'admitting') return { kind: 'stale-admission' }
-            return this.claimLocked(manager, organizationId, normalizedAddress, payerRequestId, newExecutionId, deadlineAt, isCandidateUsable, {
-                type: 'batch_group',
-                id: batchId,
-            })
+            if (admission?.state !== 'admitting') {
+                return { kind: 'stale-admission' }
+            }
+            return this.claimLocked(
+                manager,
+                organizationId,
+                normalizedAddress,
+                payerRequestId,
+                newExecutionId,
+                deadlineAt,
+                isCandidateUsable,
+                {
+                    type: 'batch_group',
+                    id: batchId,
+                },
+            )
         })
     }
 
@@ -141,7 +162,9 @@ export class TypeOrmVerificationExecutionStore implements VerificationExecutionS
                 ),
             )
         } catch (error) {
-            if (!isUniqueViolation(error)) throw error
+            if (!isUniqueViolation(error)) {
+                throw error
+            }
             const winner = await manager.findOneOrFail(VerificationExecutionEntity, {
                 where: { organizationId, normalizedAddress, state: In(NONTERMINAL_STATES) },
                 lock: { mode: 'pessimistic_write' },
@@ -179,6 +202,7 @@ export class TypeOrmVerificationExecutionStore implements VerificationExecutionS
                 execution.state = 'queued'
                 await manager.save(VerificationExecutionEntity, execution)
             }
+            await enqueueVerificationAttempt(manager, execution, new Date())
             return toRecord(execution)
         })
     }
@@ -211,7 +235,9 @@ export class TypeOrmVerificationExecutionStore implements VerificationExecutionS
     ): Promise<BatchAdmissionGuardedWrite> {
         return this.dataSource.transaction(async manager => {
             const admission = await lockFencedAdmission(manager, batchId, organizationId, fence, 'read')
-            if (admission?.state !== 'funding' || admission.fundingDecision !== requiredDecision) return 'stale'
+            if (admission?.state !== 'funding' || admission.fundingDecision !== requiredDecision) {
+                return 'stale'
+            }
 
             const execution = await manager.findOneOrFail(VerificationExecutionEntity, {
                 where: { executionId, organizationId },
@@ -223,6 +249,9 @@ export class TypeOrmVerificationExecutionStore implements VerificationExecutionS
             if (execution.state === 'funding_pending') {
                 execution.state = next
                 await manager.save(VerificationExecutionEntity, execution)
+            }
+            if (next === 'queued') {
+                await enqueueVerificationAttempt(manager, execution, new Date())
             }
             return 'applied'
         })
@@ -254,10 +283,19 @@ export class TypeOrmVerificationExecutionStore implements VerificationExecutionS
                 where: { executionId, organizationId },
                 lock: { mode: 'pessimistic_write' },
             })
-            if (!execution) return null
-            if (execution.state !== 'queued' && execution.state !== 'awaiting_retry') return null
-            if (execution.state === 'awaiting_retry' && execution.retryAt !== null && execution.retryAt.getTime() > now.getTime())
+            if (!execution) {
                 return null
+            }
+            if (execution.state !== 'queued' && execution.state !== 'awaiting_retry') {
+                return null
+            }
+            if (
+                execution.state === 'awaiting_retry' &&
+                execution.retryAt !== null &&
+                execution.retryAt.getTime() > now.getTime()
+            ) {
+                return null
+            }
 
             execution.state = 'running'
             execution.leaseOwnerId = leaseOwnerId
@@ -279,10 +317,18 @@ export class TypeOrmVerificationExecutionStore implements VerificationExecutionS
                 where: { executionId, organizationId },
                 lock: { mode: 'pessimistic_write' },
             })
-            if (!execution) return null
-            if (execution.state !== 'running') return null
-            if (execution.attemptGeneration !== generation) return null
-            if (execution.leaseOwnerId !== leaseOwnerId) return null
+            if (!execution) {
+                return null
+            }
+            if (execution.state !== 'running') {
+                return null
+            }
+            if (execution.attemptGeneration !== generation) {
+                return null
+            }
+            if (execution.leaseOwnerId !== leaseOwnerId) {
+                return null
+            }
 
             execution.leaseExpiresAt = leaseExpiresAt
             await manager.save(VerificationExecutionEntity, execution)
@@ -301,9 +347,15 @@ export class TypeOrmVerificationExecutionStore implements VerificationExecutionS
                 where: { executionId, organizationId },
                 lock: { mode: 'pessimistic_write' },
             })
-            if (!execution) return null
-            if (execution.state === 'completed' || execution.state === 'canceled') return null
-            if (execution.attemptGeneration !== expectedGeneration) return null
+            if (!execution) {
+                return null
+            }
+            if (execution.state === 'completed' || execution.state === 'canceled') {
+                return null
+            }
+            if (execution.attemptGeneration !== expectedGeneration) {
+                return null
+            }
 
             execution.attemptGeneration += 1
             execution.leaseOwnerId = null
@@ -315,18 +367,25 @@ export class TypeOrmVerificationExecutionStore implements VerificationExecutionS
         })
     }
 
-    async cancelIfNoCaptureIntention(executionId: string, organizationId: string): Promise<VerificationExecutionRecord> {
+    async cancelIfNoCaptureIntention(
+        executionId: string,
+        organizationId: string,
+    ): Promise<VerificationExecutionRecord> {
         return this.dataSource.transaction(async manager => {
             const execution = await manager.findOneOrFail(VerificationExecutionEntity, {
                 where: { executionId, organizationId },
                 lock: { mode: 'pessimistic_write' },
             })
-            if (execution.state === 'completed' || execution.state === 'canceled') return toRecord(execution)
+            if (execution.state === 'completed' || execution.state === 'canceled') {
+                return toRecord(execution)
+            }
 
             // An intention of either decision means settlement has already been decided; deadline/reconciler
             // cancellation must defer to it rather than override a capture already underway.
             const intention = await manager.findOneBy(VerificationSettlementIntentionEntity, { executionId })
-            if (intention) return toRecord(execution)
+            if (intention) {
+                return toRecord(execution)
+            }
 
             execution.state = 'canceled'
             execution.leaseOwnerId = null
@@ -346,6 +405,13 @@ export class TypeOrmVerificationExecutionStore implements VerificationExecutionS
                         .where("execution.fundingOwnerType <> 'batch_group'")
                         .orWhere("execution.state <> 'funding_pending'")
                 }),
+            )
+            // Active attempts are recovered by queue redelivery, not repeated sweeps. Excluding them until
+            // their deadline prevents a full page of long-running jobs from starving funding/retry recovery.
+            .andWhere('(execution.activeAttemptId IS NULL OR execution.deadlineAt <= :now)', { now: new Date() })
+            .andWhere("execution.state <> 'settling'")
+            .andWhere(
+                "(execution.state <> 'awaiting_retry' OR execution.retryAt <= :now OR execution.deadlineAt <= :now)",
             )
             .orderBy('execution.updatedAt', 'ASC')
             .take(limit)
@@ -373,7 +439,10 @@ export class TypeOrmVerificationExecutionStore implements VerificationExecutionS
         return rows.map(toRecord)
     }
 
-    async cancelBatchGroupUnstarted(batchId: string, organizationId: string): Promise<readonly VerificationExecutionRecord[]> {
+    async cancelBatchGroupUnstarted(
+        batchId: string,
+        organizationId: string,
+    ): Promise<readonly VerificationExecutionRecord[]> {
         return this.dataSource.transaction(async manager => {
             const rows = await manager.find(VerificationExecutionEntity, {
                 where: {
@@ -384,7 +453,9 @@ export class TypeOrmVerificationExecutionStore implements VerificationExecutionS
                 },
                 lock: { mode: 'pessimistic_write' },
             })
-            if (rows.length === 0) return []
+            if (rows.length === 0) {
+                return []
+            }
 
             for (const row of rows) {
                 row.state = 'canceled'

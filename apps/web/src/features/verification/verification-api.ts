@@ -1,7 +1,8 @@
 import type { ApiClient, components, paths } from '@tuposoft/lead-email-finder-api-client'
 import { ApiError } from '../../api/api-error'
 
-export type VerificationStatus = paths['/verifyAsync/{id}']['get']['responses'][200]['content']['application/json']
+export type VerificationStatus =
+    paths['/v1/email-verifications/{id}']['get']['responses'][200]['content']['application/json']
 export type VerificationResult = Extract<VerificationStatus, { state: 'completed' }>['result']
 export type VerificationOperation = components['schemas']['VerificationOperationMetadataDto']
 
@@ -15,35 +16,44 @@ export function isVerificationId(id: string): boolean {
 }
 
 export async function createVerification(api: ApiClient, email: string, requestKey: string): Promise<{ id: string }> {
-    const { data, response } = await api.POST('/verifyAsync', {
+    const { data, response } = await api.POST('/v1/email-verifications', {
         body: { email },
         headers: { 'Idempotency-Key': requestKey },
         signal: AbortSignal.timeout(30_000),
     })
-    if (response.status !== 202 || !data || !isVerificationId(data.id))
+
+    if (response.status !== 202 || !data || !isVerificationId(data.id)) {
         throw new ApiError(response.status, 'request-failed')
+    }
+
     return { id: data.id }
 }
 
 function projectOperation(operation: VerificationOperation | undefined): VerificationOperation | undefined {
-    if (!operation) return undefined
+    if (!operation) {
+        return undefined
+    }
+
     const { id, source, observedAt, cacheExpiresAt, billing } = operation
-    const timestamp = (value: unknown) =>
+    const isNullableTimestamp = (value: unknown): boolean =>
         value === null || (typeof value === 'string' && Number.isFinite(Date.parse(value)))
+
     if (
         typeof id !== 'string' ||
         !isVerificationId(id) ||
         !['fresh', 'cache', 'shared'].includes(source) ||
-        !timestamp(observedAt) ||
-        !timestamp(cacheExpiresAt) ||
+        !isNullableTimestamp(observedAt) ||
+        !isNullableTimestamp(cacheExpiresAt) ||
         !billing ||
         !['pending', 'settled'].includes(billing.state) ||
         ![0, 1].includes(billing.charged) ||
         ![0, 1].includes(billing.reserved) ||
         (billing.reason !== undefined &&
             !['conclusive', 'cached', 'shared', 'inconclusive', 'failed'].includes(billing.reason))
-    )
+    ) {
         return undefined
+    }
+
     return {
         id,
         source,
@@ -60,11 +70,15 @@ function projectOperation(operation: VerificationOperation | undefined): Verific
 
 export async function readVerification(api: ApiClient, id: string, signal?: AbortSignal): Promise<VerificationStatus> {
     const timeout = AbortSignal.timeout(15_000)
-    const { data, response } = await api.GET('/verifyAsync/{id}', {
+    const { data, response } = await api.GET('/v1/email-verifications/{id}', {
         params: { path: { id } },
         signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
     })
-    if (!data) throw new ApiError(response.status, 'request-failed')
+
+    if (!data) {
+        throw new ApiError(response.status, 'request-failed')
+    }
+
     // Only the public contract enters the session cache, even if a server adds fields accidentally.
     switch (data.state) {
         case 'queued':
@@ -79,7 +93,8 @@ export async function readVerification(api: ApiClient, id: string, signal?: Abor
             }
         case 'completed': {
             const result = data.result
-            const nullableBoolean = (value: unknown) => value === null || typeof value === 'boolean'
+            const isNullableBoolean = (value: unknown): boolean => value === null || typeof value === 'boolean'
+
             if (
                 !result ||
                 typeof result.id !== 'string' ||
@@ -87,15 +102,17 @@ export async function readVerification(api: ApiClient, id: string, signal?: Abor
                 ![result.email, result.localPart, result.domain, result.reason].every(
                     value => typeof value === 'string' && value.length > 0,
                 ) ||
-                !nullableBoolean(result.exists) ||
-                !nullableBoolean(result.catchAll) ||
+                !isNullableBoolean(result.exists) ||
+                !isNullableBoolean(result.catchAll) ||
                 !Array.isArray(result.sources) ||
                 !result.sources.every(value => typeof value === 'string') ||
                 ![result.format, result.mxDomain, result.targetExchange].every(
                     value => value === undefined || typeof value === 'string',
                 )
-            )
+            ) {
                 throw new ApiError(502, 'request-failed')
+            }
+
             const {
                 id: resultId,
                 email,
@@ -109,6 +126,7 @@ export async function readVerification(api: ApiClient, id: string, signal?: Abor
                 mxDomain,
                 targetExchange,
             } = data.result
+
             return {
                 state: 'completed',
                 ...('operation' in data ? { operation: projectOperation(data.operation) } : {}),

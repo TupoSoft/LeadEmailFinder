@@ -331,7 +331,7 @@ describe('PII-safe request logging', () => {
     })
 
     it.each([
-        ['/verifications/', '', 'private-domain.test'],
+        ['/v1/email-verifications/', '', 'private-domain.test'],
         ['/verifyAsync/', '', 'provider-credential-secret'],
         ['/verifyBatch/', '/results', 'private-batch-domain.test'],
     ])('conceals non-UUID values on %s result routes', async (prefix, suffix, privateValue) => {

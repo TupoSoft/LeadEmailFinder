@@ -1,5 +1,5 @@
 // Keep the corresponding Nginx locations in docker/web/default.conf identical.
-export const API_PREFIXES = ['/v1', '/verify', '/verifyAsync', '/verifyBatch', '/emails', '/credits', '/docs'] as const
+export const API_PREFIXES = ['/v1', '/verifyBatch', '/emails', '/credits', '/docs'] as const
 export const API_EXACT_PATHS = ['/health', '/openapi.json', '/docs-json', '/docs-yaml'] as const
 
 const escapePattern = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -20,7 +20,7 @@ export function isApiRequest(target: string): boolean {
         }
         const trailingSlash = /\/(?:\.|\.\.)?$/.test(pathname) && segments.length > 0 ? '/' : ''
         const normalized = `/${segments.join('/')}${trailingSlash}`
-        return API_PROXY_PATTERNS.some((pattern) => new RegExp(pattern).test(normalized))
+        return API_PROXY_PATTERNS.some(pattern => new RegExp(pattern).test(normalized))
     } catch {
         return false
     }

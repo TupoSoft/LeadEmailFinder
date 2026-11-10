@@ -23,16 +23,17 @@ RUN corepack enable
 # Install the API dependencies and the shared development tools independently of the web app.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json apps/api/package.json
+COPY packages/verification-contracts/package.json packages/verification-contracts/package.json
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm --filter @tuposoft/lead-email-finder --filter @tuposoft/lead-email-finder-api... install --frozen-lockfile
 
 COPY tsconfig.base.json ./
 COPY apps/api ./apps/api
-COPY config ./config
+COPY packages/verification-contracts ./packages/verification-contracts
 
 # Compile during the image build; the startup command watches for source changes.
 WORKDIR /app/apps/api
-RUN pnpm build
+RUN pnpm --filter @tuposoft/lead-email-finder-verification-contracts build && pnpm build
 
 # Debug
 EXPOSE 9229

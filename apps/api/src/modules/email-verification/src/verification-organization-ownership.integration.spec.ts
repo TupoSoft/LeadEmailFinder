@@ -8,12 +8,6 @@ import { TypeOrmVerificationStore } from './infrastructure/persistence/typeorm-v
 import { SmtpVerificationEntity } from './infrastructure/persistence/typeorm/smtp-verification.entity'
 import { VerificationSettlementIntentionEntity } from './infrastructure/persistence/typeorm/verification-settlement-intention.entity'
 import { TypeOrmSmtpVerificationStore } from './infrastructure/persistence/typeorm-smtp-verification.store'
-import { SmtpMailboxProbe } from './infrastructure/mailbox/smtp/smtp-mailbox-probe'
-import { SmtpVerificationReason } from './infrastructure/mailbox/smtp/smtp.enums'
-import { EmailVerificationOrchestrator } from './application/email-verification.service'
-import { DomainPolicyService } from './application/domain-policy.service'
-import { EmailAdministrationService } from './application/email-administration.service'
-import { MailboxVerificationService } from './application/mailbox-verification.service'
 import { TypeOrmVerificationResultReader } from './infrastructure/typeorm-verification-result-reader'
 
 const postgresUrl = process.env['TEST_POSTGRES_URL']
@@ -49,7 +43,9 @@ describeWithPostgres('verification organization ownership', () => {
     })
 
     afterAll(async () => {
-        if (!dataSource?.isInitialized) return
+        if (!dataSource?.isInitialized) {
+            return
+        }
 
         await dataSource.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`)
         await dataSource.destroy()
@@ -164,7 +160,7 @@ describeWithPostgres('verification organization ownership', () => {
                 organizationId: organizationAId,
                 id: address,
                 exists: true,
-                reason: SmtpVerificationReason.AcceptedEmail,
+                reason: EmailVerificationReason.AcceptedEmail,
                 secureTransport: true,
                 evidenceObservedAt: new Date(),
                 evidencePolicyVersion: 1,
@@ -173,7 +169,7 @@ describeWithPostgres('verification organization ownership', () => {
                 organizationId: organizationBId,
                 id: address,
                 exists: false,
-                reason: SmtpVerificationReason.RejectedEmail,
+                reason: EmailVerificationReason.RejectedEmail,
                 secureTransport: true,
                 evidenceObservedAt: new Date(),
                 evidencePolicyVersion: 1,
@@ -202,28 +198,13 @@ describeWithPostgres('verification organization ownership', () => {
         ).resolves.toBeNull()
         await expect(resultReader.findOwned({ organizationId: organizationAId, id: randomUUID() })).resolves.toBeNull()
 
-        const dnsService = { resolve: jest.fn() }
-        const mxResolver = { resolve: jest.fn() }
-        const clock = { now: () => new Date() }
-        const smtpMailboxProbe = new SmtpMailboxProbe(
-            dnsService as never,
-            mxResolver,
-            { addToBlacklist: jest.fn() } as never,
-            { acquire: jest.fn(), release: jest.fn() } as never,
-            { create: jest.fn() } as never,
-            new TypeOrmSmtpVerificationStore(smtpRepository),
-            { onConnectionOutcome: jest.fn() } as never,
-            clock,
+        const smtpStore = new TypeOrmSmtpVerificationStore(smtpRepository)
+        await expect(smtpStore.findByAddress(organizationAId, address)).resolves.toEqual(
+            expect.objectContaining({ id: address, exists: true }),
         )
-
-        await expect(smtpMailboxProbe.probe(organizationAId, address)).resolves.toEqual(
-            expect.objectContaining({ email: address, exists: true }),
+        await expect(smtpStore.findByAddress(organizationBId, address)).resolves.toEqual(
+            expect.objectContaining({ id: address, exists: false }),
         )
-        await expect(smtpMailboxProbe.probe(organizationBId, address)).resolves.toEqual(
-            expect.objectContaining({ email: address, exists: false }),
-        )
-        expect(dnsService.resolve).not.toHaveBeenCalled()
-        expect(mxResolver.resolve).not.toHaveBeenCalled()
 
         const smtpRows = await smtpRepository.findBy({ id: address })
         expect(smtpRows).toHaveLength(2)
@@ -267,47 +248,19 @@ describeWithPostgres('verification organization ownership', () => {
             }),
         ])
 
-        const laterVerification = new EmailVerificationOrchestrator(
-            {
-                verify: jest.fn().mockResolvedValue({
-                    email: 'owned@example.test',
-                    domain: 'example.test',
-                    localPart: 'owned',
-                    exists: false,
-                    catchAll: false,
-                    reason: EmailVerificationReason.RejectedEmail,
-                    sources: [EmailVerificationSource.MX],
-                    verificationQuality: 'conclusive_negative',
-                    evidenceObservedAt: new Date(),
-                    evidencePolicyVersion: 1,
-                }),
-            } as unknown as MailboxVerificationService,
-            new TypeOrmVerificationStore(verificationRepository),
-            {
-                upsertEmail: jest
-                    .fn()
-                    .mockResolvedValueOnce({
-                        email: 'owned@example.test',
-                        username: 'owned',
-                        domain: 'example.test',
-                        exists: true,
-                        lastVerificationId: ownedBatchVerification.id,
-                        createdAt: ownedBatchVerification.createdAt,
-                        updatedAt: ownedBatchVerification.createdAt,
-                    })
-                    .mockResolvedValueOnce({
-                        email: 'owned@example.test',
-                        username: 'owned',
-                        domain: 'example.test',
-                        exists: false,
-                        createdAt: ownedBatchVerification.createdAt,
-                        updatedAt: ownedBatchVerification.createdAt,
-                    }),
-            } as unknown as EmailAdministrationService,
-            { isVerificationAllowed: jest.fn().mockResolvedValue(true) } as unknown as DomainPolicyService,
-        )
-
-        await laterVerification.verify({ organizationId: organizationAId, email: 'owned@example.test' })
+        const store = new TypeOrmVerificationStore(verificationRepository)
+        await store.create(organizationAId, {
+            email: 'owned@example.test',
+            domain: 'example.test',
+            localPart: 'owned',
+            exists: false,
+            catchAll: false,
+            reason: EmailVerificationReason.RejectedEmail,
+            sources: [EmailVerificationSource.MX],
+            verificationQuality: 'conclusive_negative',
+            evidenceObservedAt: new Date(),
+            evidencePolicyVersion: 1,
+        })
 
         await expect(verificationRepository.findOneByOrFail({ id: ownedBatchVerification.id })).resolves.toEqual(
             expect.objectContaining({ organizationId: organizationAId, batchId }),

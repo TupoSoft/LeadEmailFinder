@@ -9,19 +9,9 @@ import {
     IsUrl,
     Max,
     Min,
-    Validate,
     ValidateIf,
-    ValidationArguments,
-    ValidatorConstraint,
-    ValidatorConstraintInterface,
 } from 'class-validator'
-import {
-    ACCOUNT_DISCOVERY_PROVIDERS,
-    type AccountDiscoveryProvider,
-    Environment,
-    IsFileVar,
-    WithFileVars,
-} from '@tuposoft/lead-email-finder/config'
+import { Environment, IsFileVar, WithFileVars } from '@tuposoft/lead-email-finder/config'
 import { PaddleEnvironmentName, PaymentsProviderName } from '@tuposoft/lead-email-finder/modules/payments'
 import { Transform, Type } from 'class-transformer'
 
@@ -33,59 +23,10 @@ const OPTIONAL_FILE_VARIABLES = [
     'POSTGRES_TLS_CA',
     'REDIS_TLS_CA',
     'S3_KMS_KEY_ID',
-    'CATCH_ALL_HTTP_PROXY_URL',
     'BETTER_AUTH_SECRET',
     'AUTH_MAIL_SMTP_PASSWORD',
+    'CLOUDFLARE_API_TOKEN',
 ] as const
-
-interface AccountDiscoveryProviderEnvironment {
-    CATCH_ALL_HTTP_PROXY_URL?: unknown
-    CATCH_ALL_HTTP_PROXY_URL_FILE?: unknown
-    CATCH_ALL_PROVIDER?: unknown
-    CATCH_ALL_PROVIDER_APPROVAL_ID?: unknown
-    CATCH_ALL_PROVIDER_REGION?: unknown
-}
-
-function isNonEmptyString(value: unknown): value is string {
-    return typeof value === 'string' && value.length > 0
-}
-
-function isConfiguredDirectlyOrByFile(
-    environment: AccountDiscoveryProviderEnvironment,
-    property: 'CATCH_ALL_HTTP_PROXY_URL',
-): boolean {
-    return isNonEmptyString(environment[property]) || isNonEmptyString(environment[`${property}_FILE`])
-}
-
-@ValidatorConstraint({ name: 'accountDiscoveryProviderConfiguration', async: false })
-class AccountDiscoveryProviderConfigurationConstraint implements ValidatorConstraintInterface {
-    validate(_value: unknown, { object }: ValidationArguments): boolean {
-        const environment = object as AccountDiscoveryProviderEnvironment
-        const { CATCH_ALL_PROVIDER: provider } = environment
-
-        if (provider === undefined) {
-            return (
-                environment.CATCH_ALL_PROVIDER_APPROVAL_ID === undefined &&
-                environment.CATCH_ALL_PROVIDER_REGION === undefined
-            )
-        }
-
-        return (
-            typeof provider === 'string' &&
-            ACCOUNT_DISCOVERY_PROVIDERS.includes(provider as AccountDiscoveryProvider) &&
-            isConfiguredDirectlyOrByFile(environment, 'CATCH_ALL_HTTP_PROXY_URL') &&
-            isNonEmptyString(environment.CATCH_ALL_PROVIDER_APPROVAL_ID) &&
-            isNonEmptyString(environment.CATCH_ALL_PROVIDER_REGION) &&
-            (provider !== 'mimecast' ||
-                environment.CATCH_ALL_PROVIDER_REGION === 'us' ||
-                environment.CATCH_ALL_PROVIDER_REGION === 'uk')
-        )
-    }
-
-    defaultMessage(): string {
-        return 'account discovery provider configuration is incomplete or unsupported'
-    }
-}
 
 function isOptionalFileVariableConfigured(
     property: (typeof OPTIONAL_FILE_VARIABLES)[number],
@@ -130,34 +71,6 @@ export class EnvironmentVariablesDto {
     @IsOptional()
     @IsString()
     REDIS_TLS_CA?: string
-
-    @IsFileVar(
-        environment =>
-            environment['CATCH_ALL_PROVIDER'] !== undefined ||
-            environment['CATCH_ALL_HTTP_PROXY_URL'] !== undefined ||
-            environment['CATCH_ALL_HTTP_PROXY_URL_FILE'] !== undefined,
-    )
-    @IsOptional()
-    @IsString()
-    CATCH_ALL_HTTP_PROXY_URL?: string
-
-    @IsOptional()
-    @IsString()
-    @IsNotEmpty()
-    @Validate(AccountDiscoveryProviderConfigurationConstraint)
-    CATCH_ALL_PROVIDER?: AccountDiscoveryProvider
-
-    @IsOptional()
-    @IsString()
-    @IsNotEmpty()
-    @Validate(AccountDiscoveryProviderConfigurationConstraint)
-    CATCH_ALL_PROVIDER_APPROVAL_ID?: string
-
-    @IsOptional()
-    @IsString()
-    @IsNotEmpty()
-    @Validate(AccountDiscoveryProviderConfigurationConstraint)
-    CATCH_ALL_PROVIDER_REGION?: string
 
     @IsFileVar()
     @IsString()
@@ -341,10 +254,21 @@ export class EnvironmentVariablesDto {
     VERIFICATION_SUBMISSION_RATE_REFILL_PER_SECOND?: number
 
     @IsOptional()
-    @Type(() => Number)
-    @IsInt()
-    @Min(1)
-    VERIFICATION_EXECUTION_MAX_CONCURRENT?: number
+    @IsString()
+    CLOUDFLARE_ACCOUNT_ID?: string
+
+    @IsFileVar(isOptionalFileVariableConfigured('CLOUDFLARE_API_TOKEN'))
+    @IsOptional()
+    @IsString()
+    CLOUDFLARE_API_TOKEN?: string
+
+    @IsOptional()
+    @IsString()
+    VERIFICATION_QUEUE_ID?: string
+
+    @IsOptional()
+    @IsString()
+    VERIFICATION_RESULTS_QUEUE_ID?: string
 
     @IsEnum(PaymentsProviderName)
     PAYMENTS_PROVIDER: PaymentsProviderName

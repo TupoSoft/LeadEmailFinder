@@ -32,22 +32,25 @@ describe('LefApiClient.getBillingSummary', () => {
         [429, 'rate_limited'],
         [503, 'service_unavailable'],
         [500, 'unexpected_upstream_error'],
-    ] as const)('rejects with the mapped code on HTTP %d -> %s, making exactly one request', async (status, expectedCode) => {
-        fetchMock.mockResolvedValueOnce(jsonResponse(status, { message: 'do-not-leak-this-secret-value' }))
-        const client = new LefApiClient('https://api.example', () => Promise.resolve('the-access-token'))
+    ] as const)(
+        'rejects with the mapped code on HTTP %d -> %s, making exactly one request',
+        async (status, expectedCode) => {
+            fetchMock.mockResolvedValueOnce(jsonResponse(status, { message: 'do-not-leak-this-secret-value' }))
+            const client = new LefApiClient('https://api.example', () => Promise.resolve('the-access-token'))
 
-        let thrown: unknown
-        try {
-            await client.getBillingSummary()
-        } catch (error) {
-            thrown = error
-        }
+            let thrown: unknown
+            try {
+                await client.getBillingSummary()
+            } catch (error) {
+                thrown = error
+            }
 
-        expect(thrown).toBeInstanceOf(UpstreamRequestError)
-        expect((thrown as UpstreamRequestError).code).toBe(expectedCode)
-        expect((thrown as Error).message).not.toContain('do-not-leak-this-secret-value')
-        expect(fetchMock).toHaveBeenCalledTimes(1)
-    })
+            expect(thrown).toBeInstanceOf(UpstreamRequestError)
+            expect((thrown as UpstreamRequestError).code).toBe(expectedCode)
+            expect((thrown as Error).message).not.toContain('do-not-leak-this-secret-value')
+            expect(fetchMock).toHaveBeenCalledTimes(1)
+        },
+    )
 
     it('surfaces retryAfterSeconds from a 429 response', async () => {
         fetchMock.mockResolvedValueOnce(jsonResponse(429, { message: 'rate limited' }, { 'Retry-After': '15' }))
@@ -83,44 +86,6 @@ const emailResult = {
     sources: ['mx'],
 }
 
-describe('LefApiClient.verifySync', () => {
-    let fetchMock: jest.Mock
-
-    beforeEach(() => {
-        fetchMock = jest.fn()
-        global.fetch = fetchMock as unknown as typeof fetch
-    })
-
-    it('sends the bearer token and email, returning a completed result on 201', async () => {
-        fetchMock.mockResolvedValueOnce(jsonResponse(201, { ...emailResult, operation }))
-        const client = new LefApiClient('https://api.example', () => Promise.resolve('the-access-token'))
-
-        await expect(client.verifySync('person@lef.test')).resolves.toEqual({ kind: 'completed', result: { ...emailResult, operation } })
-        const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
-        expect(url).toBe('https://api.example/verify')
-        expect(init.method).toBe('POST')
-        expect(JSON.parse(init.body as string)).toEqual({ email: 'person@lef.test' })
-        expect((init.headers as Record<string, string>).Authorization).toBe('Bearer the-access-token')
-    })
-
-    it('returns an accepted pointer, not an error, when the API falls back to async on 202', async () => {
-        fetchMock.mockResolvedValueOnce(jsonResponse(202, { id: 'async-id' }))
-        const client = new LefApiClient('https://api.example', () => Promise.resolve('the-access-token'))
-
-        await expect(client.verifySync('slow@lef.test')).resolves.toEqual({ kind: 'accepted', id: 'async-id' })
-    })
-
-    it.each([
-        [402, 'insufficient_credits'],
-        [429, 'rate_limited'],
-    ] as const)('rejects with the mapped code on HTTP %d -> %s', async (status, expectedCode) => {
-        fetchMock.mockResolvedValueOnce(jsonResponse(status, { message: 'insufficient_credits' }))
-        const client = new LefApiClient('https://api.example', () => Promise.resolve('the-access-token'))
-
-        await expect(client.verifySync('person@lef.test')).rejects.toMatchObject({ code: expectedCode })
-    })
-})
-
 describe('LefApiClient.submitAsyncVerification', () => {
     let fetchMock: jest.Mock
 
@@ -135,7 +100,7 @@ describe('LefApiClient.submitAsyncVerification', () => {
 
         await expect(client.submitAsyncVerification('person@lef.test')).resolves.toEqual({ id: 'async-id' })
         const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
-        expect(url).toBe('https://api.example/verifyAsync')
+        expect(url).toBe('https://api.example/v1/email-verifications')
         expect(JSON.parse(init.body as string)).toEqual({ email: 'person@lef.test' })
     })
 
@@ -143,7 +108,9 @@ describe('LefApiClient.submitAsyncVerification', () => {
         fetchMock.mockResolvedValueOnce(jsonResponse(402, { message: 'insufficient_credits' }))
         const client = new LefApiClient('https://api.example', () => Promise.resolve('the-access-token'))
 
-        await expect(client.submitAsyncVerification('person@lef.test')).rejects.toMatchObject({ code: 'insufficient_credits' })
+        await expect(client.submitAsyncVerification('person@lef.test')).rejects.toMatchObject({
+            code: 'insufficient_credits',
+        })
     })
 })
 
@@ -167,7 +134,7 @@ describe('LefApiClient.getAsyncVerificationStatus', () => {
 
         await expect(client.getAsyncVerificationStatus('op-id')).resolves.toEqual(state)
         const [url] = fetchMock.mock.calls[0] as [string]
-        expect(url).toBe('https://api.example/verifyAsync/op-id')
+        expect(url).toBe('https://api.example/v1/email-verifications/op-id')
     })
 
     it('rejects with not_found for a missing or foreign operation', async () => {
@@ -175,38 +142,6 @@ describe('LefApiClient.getAsyncVerificationStatus', () => {
         const client = new LefApiClient('https://api.example', () => Promise.resolve('the-access-token'))
 
         await expect(client.getAsyncVerificationStatus('missing-id')).rejects.toMatchObject({ code: 'not_found' })
-    })
-})
-
-describe('LefApiClient.getVerificationResult', () => {
-    let fetchMock: jest.Mock
-
-    beforeEach(() => {
-        fetchMock = jest.fn()
-        global.fetch = fetchMock as unknown as typeof fetch
-    })
-
-    it('returns the result for an owned id', async () => {
-        fetchMock.mockResolvedValueOnce(jsonResponse(200, emailResult))
-        const client = new LefApiClient('https://api.example', () => Promise.resolve('the-access-token'))
-
-        await expect(client.getVerificationResult('result-id')).resolves.toEqual(emailResult)
-        const [url] = fetchMock.mock.calls[0] as [string]
-        expect(url).toBe('https://api.example/verifications/result-id')
-    })
-
-    it('rejects with not_found for a missing or foreign result id', async () => {
-        fetchMock.mockResolvedValueOnce(jsonResponse(404, { message: 'Verification result not found' }))
-        const client = new LefApiClient('https://api.example', () => Promise.resolve('the-access-token'))
-
-        await expect(client.getVerificationResult('foreign-id')).rejects.toMatchObject({ code: 'not_found' })
-    })
-
-    it('rejects with validation_failed for a malformed id', async () => {
-        fetchMock.mockResolvedValueOnce(jsonResponse(400, { message: 'invalid uuid' }))
-        const client = new LefApiClient('https://api.example', () => Promise.resolve('the-access-token'))
-
-        await expect(client.getVerificationResult('not-a-uuid')).rejects.toMatchObject({ code: 'validation_failed' })
     })
 })
 

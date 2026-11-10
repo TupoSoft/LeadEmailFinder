@@ -1,23 +1,21 @@
 import { Module } from '@nestjs/common'
-import { BullModule } from '@nestjs/bullmq'
+import { DataSource } from 'typeorm'
+import { ConfigModule } from '@nestjs/config'
 import { EmailVerificationCoreModule } from '../../email-verification-core.module'
 import { VERIFICATION_EXECUTION_DISPATCHER } from '../../../application/ports/verification-execution-dispatcher'
-import { BullVerificationExecutionDispatcher } from './bull-verification-execution-dispatcher'
-import { VerificationExecutionProcessor } from './verification-execution.processor'
-import { VERIFICATION_EXECUTION_DEFAULT_JOB_OPTIONS, VERIFICATION_EXECUTION_QUEUE_NAME } from './verification-execution-queue.config'
+import { TypeOrmVerificationQueueStore } from '../../persistence/typeorm-verification-queue.store'
+import { CloudflareVerificationQueues } from './cloudflare-verification-queues'
 
 @Module({
-    imports: [
-        EmailVerificationCoreModule,
-        BullModule.registerQueue({
-            name: VERIFICATION_EXECUTION_QUEUE_NAME,
-            defaultJobOptions: VERIFICATION_EXECUTION_DEFAULT_JOB_OPTIONS,
-        }),
-    ],
+    imports: [EmailVerificationCoreModule, ConfigModule],
     providers: [
-        BullVerificationExecutionDispatcher,
-        VerificationExecutionProcessor,
-        { provide: VERIFICATION_EXECUTION_DISPATCHER, useExisting: BullVerificationExecutionDispatcher },
+        {
+            provide: TypeOrmVerificationQueueStore,
+            inject: [DataSource],
+            useFactory: (source: DataSource) => new TypeOrmVerificationQueueStore(source),
+        },
+        CloudflareVerificationQueues,
+        { provide: VERIFICATION_EXECUTION_DISPATCHER, useExisting: TypeOrmVerificationQueueStore },
     ],
     exports: [VERIFICATION_EXECUTION_DISPATCHER],
 })

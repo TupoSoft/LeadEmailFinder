@@ -7,7 +7,7 @@ import {
     VerificationSettlementIntentionRecord,
     VerificationSettlementStore,
 } from '../ports/verification-settlement-store'
-import { VerificationExecutionRunner } from './verification-execution-runner'
+import { VerificationExecutionDispatcher } from '../ports/verification-execution-dispatcher'
 import { VerificationReconciler } from './verification-reconciler'
 import { VerificationSettlementService } from './verification-settlement.service'
 
@@ -36,7 +36,9 @@ function execution(overrides: Partial<VerificationExecutionRecord> = {}): Verifi
     }
 }
 
-function intention(overrides: Partial<VerificationSettlementIntentionRecord> = {}): VerificationSettlementIntentionRecord {
+function intention(
+    overrides: Partial<VerificationSettlementIntentionRecord> = {},
+): VerificationSettlementIntentionRecord {
     return {
         executionId: 'execution-1',
         organizationId,
@@ -49,7 +51,9 @@ function intention(overrides: Partial<VerificationSettlementIntentionRecord> = {
     }
 }
 
-function executionsStore(overrides: Partial<jest.Mocked<VerificationExecutionStore>> = {}): jest.Mocked<VerificationExecutionStore> {
+function executionsStore(
+    overrides: Partial<jest.Mocked<VerificationExecutionStore>> = {},
+): jest.Mocked<VerificationExecutionStore> {
     return {
         claimOrJoin: jest.fn(),
         findById: jest.fn(),
@@ -69,7 +73,9 @@ function executionsStore(overrides: Partial<jest.Mocked<VerificationExecutionSto
     }
 }
 
-function settlementsStore(overrides: Partial<jest.Mocked<VerificationSettlementStore>> = {}): jest.Mocked<VerificationSettlementStore> {
+function settlementsStore(
+    overrides: Partial<jest.Mocked<VerificationSettlementStore>> = {},
+): jest.Mocked<VerificationSettlementStore> {
     return {
         persistResultAndIntention: jest.fn(),
         findIntention: jest.fn(),
@@ -95,11 +101,13 @@ function clock(): VerificationClock {
     return { now: () => now }
 }
 
-function requestsStore(overrides: Partial<jest.Mocked<VerificationRequestStore>> = {}): jest.Mocked<VerificationRequestStore> {
+function requestsStore(
+    overrides: Partial<jest.Mocked<VerificationRequestStore>> = {},
+): jest.Mocked<VerificationRequestStore> {
     return {
         findByClientKey: jest.fn(),
         insert: jest.fn(),
-        findById: jest.fn(),
+        findById: jest.fn().mockResolvedValue({ requestId: 'request-1' }),
         attachExecution: jest.fn(),
         settleCanceled: jest.fn().mockResolvedValue(undefined),
         ...overrides,
@@ -115,15 +123,19 @@ function reconcilerFixture(
     requests: jest.Mocked<VerificationRequestStore>
     settlements: jest.Mocked<VerificationSettlementStore>
     settlementService: jest.Mocked<VerificationSettlementService>
-    runner: jest.Mocked<VerificationExecutionRunner>
+    dispatcher: jest.Mocked<VerificationExecutionDispatcher>
     credits: jest.Mocked<CreditReservationService>
     batchRecovery: jest.Mocked<BatchAdmissionRecovery>
 } {
     const executions = executionsStore(executionsOverrides)
     const requests = requestsStore()
     const settlements = settlementsStore(settlementsOverrides)
-    const settlementService = { settle: jest.fn().mockResolvedValue(undefined) } as unknown as jest.Mocked<VerificationSettlementService>
-    const runner = { execute: jest.fn().mockResolvedValue({ kind: 'settled' }) } as unknown as jest.Mocked<VerificationExecutionRunner>
+    const settlementService = {
+        settle: jest.fn().mockResolvedValue(undefined),
+    } as unknown as jest.Mocked<VerificationSettlementService>
+    const dispatcher = {
+        dispatch: jest.fn().mockResolvedValue(undefined),
+    } as unknown as jest.Mocked<VerificationExecutionDispatcher>
     const credits = {
         getReservation: jest.fn().mockResolvedValue(null),
         release: jest.fn().mockResolvedValue(undefined),
@@ -136,13 +148,12 @@ function reconcilerFixture(
         requests,
         settlements,
         settlementService,
-        runner,
+        dispatcher,
         credits,
         clock(),
-        LEASE_TAKEOVER_GRACE_MS,
         batchRecovery,
     )
-    return { reconciler, executions, requests, settlements, settlementService, runner, credits, batchRecovery }
+    return { reconciler, executions, requests, settlements, settlementService, dispatcher, credits, batchRecovery }
 }
 
 describe('VerificationReconciler', () => {
@@ -157,7 +168,12 @@ describe('VerificationReconciler', () => {
         expect(credits.getReservation).toHaveBeenCalledWith(organizationId, 'execution-1')
         expect(executions.markQueued).toHaveBeenCalledWith('execution-1', organizationId)
         expect(executions.cancelFundingFailure).not.toHaveBeenCalled()
-        expect(report).toEqual({ executionsChecked: 1, intentionsSettled: 0, cancellationsCleanedUp: 0, batchGroupsChecked: 0 })
+        expect(report).toEqual({
+            executionsChecked: 1,
+            intentionsSettled: 0,
+            cancellationsCleanedUp: 0,
+            batchGroupsChecked: 0,
+        })
     })
 
     it('cancels a funding_pending execution with no reservation on record', async () => {
@@ -172,41 +188,41 @@ describe('VerificationReconciler', () => {
         expect(executions.markQueued).not.toHaveBeenCalled()
     })
 
-    it('drives a queued execution forward through the runner', async () => {
-        const { reconciler, runner } = reconcilerFixture({
+    it('drives a queued execution forward through the dispatcher', async () => {
+        const { reconciler, dispatcher } = reconcilerFixture({
             pageNonterminal: jest.fn().mockResolvedValue([execution({ state: 'queued' })]),
         })
 
         await reconciler.reconcile(100)
 
-        expect(runner.execute).toHaveBeenCalledWith('execution-1', organizationId)
+        expect(dispatcher.dispatch).toHaveBeenCalledWith('execution-1', organizationId)
     })
 
     it('drives an awaiting_retry execution forward once its retry time is due', async () => {
-        const { reconciler, runner } = reconcilerFixture({
-            pageNonterminal: jest.fn().mockResolvedValue([
-                execution({ state: 'awaiting_retry', retryAt: new Date(now.getTime() - 1) }),
-            ]),
+        const { reconciler, dispatcher } = reconcilerFixture({
+            pageNonterminal: jest
+                .fn()
+                .mockResolvedValue([execution({ state: 'awaiting_retry', retryAt: new Date(now.getTime() - 1) })]),
         })
 
         await reconciler.reconcile(100)
 
-        expect(runner.execute).toHaveBeenCalledWith('execution-1', organizationId)
+        expect(dispatcher.dispatch).toHaveBeenCalledWith('execution-1', organizationId)
     })
 
     it('leaves an awaiting_retry execution alone before its retry time is due', async () => {
-        const { reconciler, runner } = reconcilerFixture({
-            pageNonterminal: jest.fn().mockResolvedValue([
-                execution({ state: 'awaiting_retry', retryAt: new Date(now.getTime() + 1) }),
-            ]),
+        const { reconciler, dispatcher } = reconcilerFixture({
+            pageNonterminal: jest
+                .fn()
+                .mockResolvedValue([execution({ state: 'awaiting_retry', retryAt: new Date(now.getTime() + 1) })]),
         })
 
         await reconciler.reconcile(100)
 
-        expect(runner.execute).not.toHaveBeenCalled()
+        expect(dispatcher.dispatch).not.toHaveBeenCalled()
     })
 
-    it('reclaims a running execution whose lease has expired past its shutdown grace', async () => {
+    it('does not replace an active queue attempt when an old lease timestamp expires', async () => {
         const { reconciler, executions } = reconcilerFixture({
             pageNonterminal: jest.fn().mockResolvedValue([
                 execution({
@@ -219,14 +235,14 @@ describe('VerificationReconciler', () => {
 
         await reconciler.reconcile(100)
 
-        expect(executions.takeoverForRetry).toHaveBeenCalledWith('execution-1', organizationId, 3, null)
+        expect(executions.takeoverForRetry).not.toHaveBeenCalled()
     })
 
     it('leaves a running execution alone while its lease is still within the shutdown grace', async () => {
         const { reconciler, executions } = reconcilerFixture({
-            pageNonterminal: jest.fn().mockResolvedValue([
-                execution({ state: 'running', leaseExpiresAt: new Date(now.getTime() - 1) }),
-            ]),
+            pageNonterminal: jest
+                .fn()
+                .mockResolvedValue([execution({ state: 'running', leaseExpiresAt: new Date(now.getTime() - 1) })]),
         })
 
         await reconciler.reconcile(100)
@@ -235,39 +251,39 @@ describe('VerificationReconciler', () => {
     })
 
     it('leaves a settling execution untouched, deferring entirely to pending-intention settlement', async () => {
-        const { reconciler, executions, runner } = reconcilerFixture({
-            pageNonterminal: jest.fn().mockResolvedValue([
-                execution({ state: 'settling', deadlineAt: new Date(now.getTime() - 1) }),
-            ]),
+        const { reconciler, executions, dispatcher } = reconcilerFixture({
+            pageNonterminal: jest
+                .fn()
+                .mockResolvedValue([execution({ state: 'settling', deadlineAt: new Date(now.getTime() - 1) })]),
         })
 
         await reconciler.reconcile(100)
 
         expect(executions.cancelIfNoCaptureIntention).not.toHaveBeenCalled()
-        expect(runner.execute).not.toHaveBeenCalled()
+        expect(dispatcher.dispatch).not.toHaveBeenCalled()
     })
 
     it('cancels a queued execution once its deadline has passed, releasing its reservation and settling its requests', async () => {
-        const { reconciler, executions, requests, runner, credits } = reconcilerFixture({
-            pageNonterminal: jest.fn().mockResolvedValue([
-                execution({ state: 'queued', deadlineAt: new Date(now.getTime() - 1) }),
-            ]),
+        const { reconciler, executions, requests, dispatcher, credits } = reconcilerFixture({
+            pageNonterminal: jest
+                .fn()
+                .mockResolvedValue([execution({ state: 'queued', deadlineAt: new Date(now.getTime() - 1) })]),
         })
         credits.getReservation.mockResolvedValue(reservation())
 
         await reconciler.reconcile(100)
 
         expect(executions.cancelIfNoCaptureIntention).toHaveBeenCalledWith('execution-1', organizationId)
-        expect(runner.execute).not.toHaveBeenCalled()
+        expect(dispatcher.dispatch).not.toHaveBeenCalled()
         expect(credits.release).toHaveBeenCalledWith(organizationId, 'execution-1')
         expect(requests.settleCanceled).toHaveBeenCalledWith('execution-1', organizationId)
     })
 
     it('skips releasing credits for a deadline-canceled execution that never held a reservation', async () => {
         const { reconciler, requests, credits } = reconcilerFixture({
-            pageNonterminal: jest.fn().mockResolvedValue([
-                execution({ state: 'funding_pending', deadlineAt: new Date(now.getTime() - 1) }),
-            ]),
+            pageNonterminal: jest
+                .fn()
+                .mockResolvedValue([execution({ state: 'funding_pending', deadlineAt: new Date(now.getTime() - 1) })]),
         })
         credits.getReservation.mockResolvedValue(null)
 
@@ -279,9 +295,9 @@ describe('VerificationReconciler', () => {
 
     it('does not release credits or settle requests when the deadline cancellation is a no-op replay', async () => {
         const { reconciler, requests, credits } = reconcilerFixture({
-            pageNonterminal: jest.fn().mockResolvedValue([
-                execution({ state: 'queued', deadlineAt: new Date(now.getTime() - 1) }),
-            ]),
+            pageNonterminal: jest
+                .fn()
+                .mockResolvedValue([execution({ state: 'queued', deadlineAt: new Date(now.getTime() - 1) })]),
             cancelIfNoCaptureIntention: jest.fn().mockResolvedValue(execution({ state: 'settling' })),
         })
 
@@ -295,14 +311,23 @@ describe('VerificationReconciler', () => {
     it('settles every pending intention it pages', async () => {
         const { reconciler, settlementService } = reconcilerFixture(
             {},
-            { pagePendingIntentions: jest.fn().mockResolvedValue([intention(), intention({ executionId: 'execution-2' })]) },
+            {
+                pagePendingIntentions: jest
+                    .fn()
+                    .mockResolvedValue([intention(), intention({ executionId: 'execution-2' })]),
+            },
         )
 
         const report = await reconciler.reconcile(100)
 
         expect(settlementService.settle).toHaveBeenCalledWith('execution-1', organizationId)
         expect(settlementService.settle).toHaveBeenCalledWith('execution-2', organizationId)
-        expect(report).toEqual({ executionsChecked: 0, intentionsSettled: 2, cancellationsCleanedUp: 0, batchGroupsChecked: 0 })
+        expect(report).toEqual({
+            executionsChecked: 0,
+            intentionsSettled: 2,
+            cancellationsCleanedUp: 0,
+            batchGroupsChecked: 0,
+        })
     })
 
     it('retries cleanup for a canceled execution a prior sweep left with a pending linked request', async () => {
@@ -316,7 +341,12 @@ describe('VerificationReconciler', () => {
         expect(credits.getReservation).toHaveBeenCalledWith(organizationId, 'execution-1')
         expect(credits.release).toHaveBeenCalledWith(organizationId, 'execution-1')
         expect(requests.settleCanceled).toHaveBeenCalledWith('execution-1', organizationId)
-        expect(report).toEqual({ executionsChecked: 0, intentionsSettled: 0, cancellationsCleanedUp: 1, batchGroupsChecked: 0 })
+        expect(report).toEqual({
+            executionsChecked: 0,
+            intentionsSettled: 0,
+            cancellationsCleanedUp: 1,
+            batchGroupsChecked: 0,
+        })
     })
 
     it('skips releasing credits during a retried cleanup once the reservation is already gone', async () => {
@@ -351,20 +381,22 @@ describe('VerificationReconciler', () => {
     })
 
     it('reconciles a queued batch-owned execution like any other', async () => {
-        const { reconciler, runner } = reconcilerFixture({
-            pageNonterminal: jest.fn().mockResolvedValue([
-                execution({ state: 'queued', fundingOwnerType: 'batch_group', fundingOwnerId: 'batch-1' }),
-            ]),
+        const { reconciler, dispatcher } = reconcilerFixture({
+            pageNonterminal: jest
+                .fn()
+                .mockResolvedValue([
+                    execution({ state: 'queued', fundingOwnerType: 'batch_group', fundingOwnerId: 'batch-1' }),
+                ]),
         })
 
         await reconciler.reconcile(100)
 
-        expect(runner.execute).toHaveBeenCalledWith('execution-1', organizationId)
+        expect(dispatcher.dispatch).toHaveBeenCalledWith('execution-1', organizationId)
     })
 
     it('recovers batch groups after single executions, settlements, and cancellation cleanup', async () => {
         const calls: string[] = []
-        const { reconciler, runner, batchRecovery } = reconcilerFixture(
+        const { reconciler, dispatcher, batchRecovery } = reconcilerFixture(
             {
                 pageNonterminal: jest.fn().mockResolvedValue([execution({ state: 'queued' })]),
                 pageCanceledPendingCleanup: jest.fn((_limit: number) => {
@@ -379,9 +411,9 @@ describe('VerificationReconciler', () => {
                 }),
             },
         )
-        runner.execute.mockImplementation(() => {
+        dispatcher.dispatch.mockImplementation(() => {
             calls.push('single')
-            return Promise.resolve({ kind: 'settled' })
+            return Promise.resolve()
         })
         batchRecovery.reconcile.mockImplementation(limit => {
             calls.push(`groups:${limit}`)

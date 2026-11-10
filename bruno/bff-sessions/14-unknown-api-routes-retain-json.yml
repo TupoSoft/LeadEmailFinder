@@ -15,7 +15,7 @@ runtime:
           expect(res.status).to.equal(404);
           expect(res.headers['content-type']).to.include('application/json');
           expect(res.body.statusCode).to.equal(404);
-          for (const path of ['/verify/not-real/child', '/verifyAsync/not-real/child', '/verifyBatch/not-real/child', '/emails/not-real/child', '/credits/not-real/child']) {
+          for (const path of ['/v1/email-verifications/not-real/child', '/verifyBatch/not-real/child', '/emails/not-real/child', '/credits/not-real/child']) {
             const response = await fetch(`${bru.getEnvVar('baseUrl')}${path}`);
             expect(response.status).to.equal(404);
             expect(response.headers.get('content-type')).to.include('application/json');

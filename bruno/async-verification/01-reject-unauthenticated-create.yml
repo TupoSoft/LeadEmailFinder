@@ -4,7 +4,7 @@ info:
     seq: 1
 http:
     method: POST
-    url: '{{baseUrl}}/verifyAsync'
+    url: '{{baseUrl}}/v1/email-verifications'
     headers:
         - name: Content-Type
           value: application/json

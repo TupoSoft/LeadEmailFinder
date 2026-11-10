@@ -15,6 +15,7 @@ WORKDIR /app
 # Install the API dependencies and the shared build tools before copying sources.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json apps/api/package.json
+COPY packages/verification-contracts/package.json packages/verification-contracts/package.json
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm --filter @tuposoft/lead-email-finder --filter @tuposoft/lead-email-finder-api... install --frozen-lockfile
 
@@ -22,7 +23,7 @@ RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
 COPY . .
 
 # Generate metadata and build the application.
-RUN pnpm --filter @tuposoft/lead-email-finder-api build
+RUN pnpm --filter @tuposoft/lead-email-finder-verification-contracts build && pnpm --filter @tuposoft/lead-email-finder-api build
 
 FROM node:${NODE_VERSION}-alpine
 
@@ -47,14 +48,13 @@ WORKDIR /app
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json apps/api/package.json
+COPY packages/verification-contracts/package.json packages/verification-contracts/package.json
 
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm --filter @tuposoft/lead-email-finder-api... install --frozen-lockfile --prod
 
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
-COPY --from=builder \
-    /app/config/privacy/account-discovery-approvals.yaml \
-    ./config/privacy/account-discovery-approvals.yaml
+COPY --from=builder /app/packages/verification-contracts/dist ./packages/verification-contracts/dist
 
 WORKDIR /app/apps/api
 USER node

@@ -66,7 +66,9 @@ describe('asynchronous verification HTTP contracts', () => {
 
         app = moduleRef.createNestApplication({ logger: false })
         app.use((incoming: Request, _response: Response, next: NextFunction) => {
-            if (principal) setAuthPrincipal(incoming, principal)
+            if (principal) {
+                setAuthPrincipal(incoming, principal)
+            }
             next()
         })
         app.useGlobalPipes(new ValidationPipe())
@@ -92,10 +94,10 @@ describe('asynchronous verification HTTP contracts', () => {
     })
 
     function verify(input: Record<string, unknown> = { email }): request.Test {
-        return request(app.getHttpServer()).post('/verifyAsync').send(input)
+        return request(app.getHttpServer()).post('/v1/email-verifications').send(input)
     }
 
-    describe('POST /verifyAsync', () => {
+    describe('POST /v1/email-verifications', () => {
         it('requires authentication before rate limiting or admission', async () => {
             principal = undefined
 
@@ -118,7 +120,7 @@ describe('asynchronous verification HTTP contracts', () => {
 
         it.each([
             ['missing email', {}],
-            ['malformed email', { email: 'not-an-email' }],
+            ['wire-unsupported email', { email: 'δοκιμή@example.com' }],
             ['localhost', { email: 'test@localhost' }],
             ['blocked company domain', { email: 'test@tuposoft.com' }],
             ['blocked product domain', { email: 'test@leademailfinder.com' }],
@@ -176,6 +178,7 @@ describe('asynchronous verification HTTP contracts', () => {
                 .expect(202)
 
             expect(response.body).toEqual({ id: operationId })
+            expect(response.headers.location).toBe(`/v1/email-verifications/${operationId}`)
             expect(service.verifyAsync).toHaveBeenCalledWith({
                 email: 'TEST@EXAMPLE.COM',
                 organizationId: 'other-organization',
@@ -208,7 +211,10 @@ describe('asynchronous verification HTTP contracts', () => {
         })
 
         it('maps address-cooldown to 429 with an integer Retry-After', async () => {
-            service.verifyAsync.mockResolvedValue({ kind: 'address-cooldown', retryAfterMs: 30_500 } satisfies VerifyAsyncOutcome)
+            service.verifyAsync.mockResolvedValue({
+                kind: 'address-cooldown',
+                retryAfterMs: 30_500,
+            } satisfies VerifyAsyncOutcome)
 
             const response = await verify().expect(429)
 
@@ -225,11 +231,11 @@ describe('asynchronous verification HTTP contracts', () => {
         })
     })
 
-    describe('GET /verifyAsync/:id', () => {
+    describe('GET /v1/email-verifications/:id', () => {
         it('requires authentication before reading state', async () => {
             principal = undefined
 
-            await request(app.getHttpServer()).get(`/verifyAsync/${operationId}`).expect(401)
+            await request(app.getHttpServer()).get(`/v1/email-verifications/${operationId}`).expect(401)
 
             expect(service.getAsyncVerificationState).not.toHaveBeenCalled()
         })
@@ -237,20 +243,20 @@ describe('asynchronous verification HTTP contracts', () => {
         it('requires verification:read before reading state', async () => {
             principal = { ...runPrincipal, permissions: ['verification:run'] }
 
-            await request(app.getHttpServer()).get(`/verifyAsync/${operationId}`).expect(403)
+            await request(app.getHttpServer()).get(`/v1/email-verifications/${operationId}`).expect(403)
 
             expect(service.getAsyncVerificationState).not.toHaveBeenCalled()
         })
 
         it('requires a UUID before reading state', async () => {
-            const response = await request(app.getHttpServer()).get('/verifyAsync/not-a-uuid').expect(400)
+            const response = await request(app.getHttpServer()).get('/v1/email-verifications/not-a-uuid').expect(400)
 
             expect(response.body).toMatchObject({ message: ['id must be a UUID'] })
             expect(service.getAsyncVerificationState).not.toHaveBeenCalled()
         })
 
         it('reads with the route ID and caller organization', async () => {
-            await request(app.getHttpServer()).get(`/verifyAsync/${operationId}`).expect(200)
+            await request(app.getHttpServer()).get(`/v1/email-verifications/${operationId}`).expect(200)
 
             expect(service.getAsyncVerificationState).toHaveBeenCalledWith(operationId, organizationId)
         })
@@ -260,7 +266,9 @@ describe('asynchronous verification HTTP contracts', () => {
                 new AsyncEmailVerificationJobNotFoundException(operationId),
             )
 
-            const response = await request(app.getHttpServer()).get(`/verifyAsync/${operationId}`).expect(404)
+            const response = await request(app.getHttpServer())
+                .get(`/v1/email-verifications/${operationId}`)
+                .expect(404)
 
             expect(response.body).toEqual({
                 statusCode: 404,
@@ -294,7 +302,9 @@ describe('asynchronous verification HTTP contracts', () => {
                 },
             } as never)
 
-            const response = await request(app.getHttpServer()).get(`/verifyAsync/${operationId}`).expect(200)
+            const response = await request(app.getHttpServer())
+                .get(`/v1/email-verifications/${operationId}`)
+                .expect(200)
 
             expect(response.body).toEqual({
                 state: 'completed',
@@ -321,7 +331,9 @@ describe('asynchronous verification HTTP contracts', () => {
         it('preserves an unexpected read failure as a generic 500', async () => {
             service.getAsyncVerificationState.mockRejectedValue(new Error('private diagnostics'))
 
-            const response = await request(app.getHttpServer()).get(`/verifyAsync/${operationId}`).expect(500)
+            const response = await request(app.getHttpServer())
+                .get(`/v1/email-verifications/${operationId}`)
+                .expect(500)
 
             expect(response.body).toEqual({ statusCode: 500, message: 'Internal server error' })
         })
