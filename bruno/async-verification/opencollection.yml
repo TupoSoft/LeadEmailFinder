@@ -5,5 +5,4 @@ request:
     scripts:
         - type: before-request
           code: |-
-              bru.setVar('platformToken', bru.getEnvVar('platformApiKey'));
               bru.setVar('customerToken', bru.getEnvVar('customerApiKey'));

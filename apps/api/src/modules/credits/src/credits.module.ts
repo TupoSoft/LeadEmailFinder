@@ -9,7 +9,6 @@ import {
 import { CreditsService } from './application/credits.service'
 import { CreditReservationService } from './application/credit-reservation.service'
 import { CreditGuard } from './api/credits.guard'
-import { CreditsController } from './api/credits.controller'
 import { BillingSummaryController } from './api/billing-summary.controller'
 import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-finder/modules/auth'
 
@@ -30,7 +29,7 @@ import { PermissionsGuard, RolePermissionPolicy } from '@tuposoft/lead-email-fin
         },
         CreditGuard,
     ],
-    controllers: [CreditsController, BillingSummaryController],
+    controllers: [BillingSummaryController],
     exports: [CreditGuard, CreditsService, CreditReservationService],
 })
 export class CreditsModule {}

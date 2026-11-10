@@ -13,9 +13,6 @@ import { loadSecrets, validate } from '@tuposoft/lead-email-finder/config'
 import { EnvironmentVariablesDto, normalizeEnvironmentConfiguration } from './environment-variables.dto'
 import { ProxyModule } from '@tuposoft/lead-email-finder/modules/proxy'
 import { IdentityModule } from '@tuposoft/lead-email-finder/modules/identity'
-import { PaymentsModule } from '@tuposoft/lead-email-finder/modules/payments'
-import { OrganizationOnboardingModule } from '@tuposoft/lead-email-finder/modules/organization-onboarding'
-import { ServiceClientManagementModule } from '@tuposoft/lead-email-finder/modules/service-client-management'
 import { AuthenticationCompositionModule } from './authentication/authentication-composition.module'
 import { PostgresModuleOptionsFactoryImpl } from './postgres-module-options-factory-impl'
 import { CustomerObjectWriteSecurityModule } from './customer-object-write-security.module'
@@ -46,9 +43,6 @@ import { createPiiSafePinoHttpOptions } from './pii-safe-logger-options'
         EmailVerificationModule,
         IdentityModule,
         AuthenticationCompositionModule,
-        OrganizationOnboardingModule,
-        ServiceClientManagementModule,
-        PaymentsModule,
         ProxyModule,
         HealthModule,
         S3Module.forRootAsync({

@@ -6,8 +6,6 @@ import { CreditsModule } from '@tuposoft/lead-email-finder/modules/credits'
 import { EmailVerificationCoreModule } from './infrastructure/email-verification-core.module'
 import { AsyncEmailVerificationController } from './api/http/asynchronous-verification/async-email-verification.controller'
 import { BatchEmailVerificationModule } from './infrastructure/queues/batch-verification/batch-email-verification.module'
-import { BatchEmailVerificationController } from './api/http/batch-verification/batch-email-verification.controller'
-import { EmailAdministrationController } from './api/http/email-administration/email-administration.controller'
 import { VERIFICATION_RESULT_READER, VerificationResultReader } from './application/verification-result-reader'
 import { TypeOrmVerificationResultReader } from './infrastructure/typeorm-verification-result-reader'
 import { VERIFICATION_CLOCK, VerificationClock } from './application/ports/verification-clock'
@@ -49,7 +47,7 @@ const DEFAULT_VERIFICATION_SUBMISSION_RATE_REFILL_PER_SECOND = 1
         VerificationReconciliationModule,
         VerificationExecutionModule,
     ],
-    controllers: [AsyncEmailVerificationController, BatchEmailVerificationController, EmailAdministrationController],
+    controllers: [AsyncEmailVerificationController],
     providers: [
         RolePermissionPolicy,
         PermissionsGuard,

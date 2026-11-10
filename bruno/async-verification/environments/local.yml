@@ -6,7 +6,5 @@ variables:
       value: '{{process.env.OIDC_ISSUER_URL}}'
     - name: organizationId
       value: '{{process.env.CUSTOMER_ORGANIZATION_ID}}'
-    - name: platformApiKey
-      value: '{{process.env.PLATFORM_API_KEY}}'
     - name: customerApiKey
       value: '{{process.env.CUSTOMER_API_KEY}}'

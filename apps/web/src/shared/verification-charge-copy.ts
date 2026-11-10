@@ -25,7 +25,7 @@ export function reservedCreditLabel(amount: number): string {
     return `${credits(amount)} initially reserved`
 }
 
-export function chargedCreditLabel(billing: components['schemas']['BatchStatusBillingDto']): string {
+export function chargedCreditLabel(billing: components['schemas']['VerificationOperationBillingDto']): string {
     if (billing.state === 'pending')
         return billing.charged > 0 ? `${credits(billing.charged)} charged so far` : verificationChargeCopy.chargePending
     return billing.charged === 0 ? verificationChargeCopy.noCharge : `${credits(billing.charged)} charged`

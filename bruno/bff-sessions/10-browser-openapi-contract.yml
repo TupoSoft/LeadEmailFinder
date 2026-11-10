@@ -1,82 +1,39 @@
 info:
-  name: 10-browser-openapi-contract
-  type: http
-  seq: 10
+    name: 10-browser-openapi-contract
+    type: http
+    seq: 10
 
 http:
-  method: GET
-  url: "{{baseUrl}}/openapi.json"
+    method: GET
+    url: '{{baseUrl}}/openapi.json'
 
 runtime:
-  scripts:
-    - type: tests
-      code: |-
-        test('publishes only the reviewed browser operations and their authentication contract', function() {
-          expect(res.status).to.equal(200);
-          expect(res.headers['content-type']).to.include('application/json');
-          expect(Object.keys(res.body.paths).sort()).to.deep.equal([
-            '/credits/{organizationId}', '/health', '/v1/auth/callback', '/v1/auth/login', '/v1/auth/logout', '/v1/auth/session',
-            '/v1/billing/credit-packs', '/v1/billing/summary', '/v1/credit-purchases', '/v1/organizations',
-            '/v1/organizations/invitations/{token}', '/v1/organizations/invitations/{token}/accept',
-            '/v1/organizations/{organizationId}', '/v1/organizations/{organizationId}/invitations', '/v1/organizations/{organizationId}/members',
-            '/v1/organizations/{organizationId}/members/{membershipId}',
-            '/v1/organizations/{organizationId}/service-clients',
-            '/v1/organizations/{organizationId}/service-clients/{serviceClientId}',
-            '/v1/organizations/{organizationId}/service-clients/{serviceClientId}/disable',
-            '/v1/organizations/{organizationId}/service-clients/{serviceClientId}/rotate',
-            '/v1/proxies', '/v1/proxies/{id}', '/v1/proxies/{id}/blacklists',
-            '/v1/email-verifications', '/v1/email-verifications/{id}', '/verifyBatch/csv', '/verifyBatch/{id}', '/verifyBatch/{id}/results'
-          ]);
-          expect(Object.keys(res.body.paths['/v1/organizations/{organizationId}/members/{membershipId}']).sort()).to.deep.equal(['delete', 'patch']);
-          expect(Object.keys(res.body.paths['/v1/organizations']).sort()).to.deep.equal(['get', 'post']);
-          expect(res.body.paths['/v1/organizations'].get.security).to.deep.equal([{ lef_session: [] }, { oidc: [] }]);
-          expect(res.body.paths['/v1/organizations'].post.security).to.deep.equal([{ lef_session: [], 'x-csrf-token': [] }, { oidc: [] }]);
-          expect(Object.keys(res.body.paths['/v1/proxies']).sort()).to.deep.equal(['get', 'post']);
-          expect(Object.keys(res.body.paths['/v1/proxies/{id}']).sort()).to.deep.equal(['delete', 'get', 'patch']);
-          expect(Object.keys(res.body.paths['/v1/proxies/{id}/blacklists'])).to.deep.equal(['post']);
-          expect(res.body.paths).not.to.have.property('/v1/proxies/healthy');
-          expect(res.body.paths['/v1/proxies'].get.security).to.deep.equal([{ lef_session: [] }, { oidc: [] }]);
-          expect(res.body.paths['/v1/proxies'].post.security).to.deep.equal([{ lef_session: [], 'x-csrf-token': [] }, { oidc: [] }]);
-          expect(res.body.components.schemas.ProxyDto.properties.blacklists.type).to.equal('array');
-          for (const field of ['auth', 'user', 'pass']) {
-            expect(res.body.components.schemas.ProxyDto.properties).not.to.have.property(field);
-          }
-          expect(Object.keys(res.body.paths['/credits/{organizationId}']).sort()).to.deep.equal(['get', 'post', 'put']);
-          expect(Object.keys(res.body.paths['/v1/organizations/{organizationId}'])).to.deep.equal(['get']);
-          var serviceClients = '/v1/organizations/{organizationId}/service-clients';
-          expect(Object.keys(res.body.paths[serviceClients]).sort()).to.deep.equal(['get', 'post']);
-          expect(res.body.paths[serviceClients].get.security).to.deep.equal([{ lef_session: [] }]);
-          expect(res.body.paths[serviceClients].post.security).to.deep.equal([{ lef_session: [], 'x-csrf-token': [] }]);
-          expect(res.body.components.schemas.ServiceClientResponseDto.properties).not.to.have.property('apiKey');
-          expect(res.body.components.schemas.ServiceClientSecretResponseDto.properties).to.have.property('apiKey');
-          expect(Object.keys(res.body.paths[serviceClients + '/{serviceClientId}'])).to.deep.equal(['delete']);
-          expect(Object.keys(res.body.paths[serviceClients + '/{serviceClientId}/rotate'])).to.deep.equal(['post']);
-          expect(Object.keys(res.body.paths[serviceClients + '/{serviceClientId}/disable'])).to.deep.equal(['post']);
-          expect(res.body.paths['/v1/organizations/invitations/{token}'].get.security).to.deep.equal([]);
-          expect(Object.keys(res.body.paths['/v1/credit-purchases']).sort()).to.deep.equal(['get', 'post']);
-          expect(Object.keys(res.body.paths['/v1/billing/summary'])).to.deep.equal(['get']);
-          expect(Object.keys(res.body.paths['/v1/email-verifications'])).to.deep.equal(['post']);
-          expect(Object.keys(res.body.paths['/v1/email-verifications/{id}'])).to.deep.equal(['get']);
-          expect(res.body.paths['/v1/email-verifications'].post.security).to.deep.include({ lef_session: [], 'x-csrf-token': [] });
-          expect(Object.keys(res.body.paths['/verifyBatch/csv'])).to.deep.equal(['post']);
-          expect(Object.keys(res.body.paths['/verifyBatch/{id}'])).to.deep.equal(['get']);
-          expect(Object.keys(res.body.paths['/verifyBatch/{id}/results'])).to.deep.equal(['get']);
-          expect(res.body.paths['/verifyBatch/csv'].post.security).to.deep.include({ lef_session: [], 'x-csrf-token': [] });
-          expect(res.body.paths['/verifyBatch/{id}'].get.security).to.deep.include({ lef_session: [] });
-          expect(res.body.paths['/verifyBatch/{id}/results'].get.responses['200'].content['text/csv'].schema.format).to.equal('binary');
-          expect(Object.keys(res.body.paths['/v1/billing/credit-packs'])).to.deep.equal(['get']);
-          var destination = res.body.paths['/v1/auth/login'].get.parameters.find(function(parameter) {
-            return parameter.name === 'destination';
-          });
-          expect(destination.in).to.equal('query');
-          expect(destination.required).to.equal(false);
-          expect(destination.schema.type).to.equal('string');
-          expect(res.body.paths['/v1/auth/session'].get.operationId).to.equal('getCurrentAccount');
-          expect(res.body.paths['/v1/auth/logout'].post.security).to.deep.equal([
-            { lef_session: [], 'x-csrf-token': [] }
-          ]);
-          expect(res.body.components.schemas.CurrentAccountContextDto.properties.email.nullable).to.equal(true);
-          expect(res.body.paths['/v1/auth/callback'].get['x-callback-error-codes']).to.deep.equal([
-            'login_state_invalid', 'authorization_code_exchange_failed', 'active_membership_required'
-          ]);
-        });
+    scripts:
+        - type: tests
+          code: |-
+              test('publishes only the reviewed browser operations and their authentication contract', function() {
+                expect(res.status).to.equal(200);
+                expect(res.headers['content-type']).to.include('application/json');
+                expect(Object.keys(res.body.paths).sort()).to.deep.equal([
+                  '/health', '/v1/auth/callback', '/v1/auth/login', '/v1/auth/logout', '/v1/auth/session',
+                  '/v1/billing/summary', '/v1/email-verifications', '/v1/email-verifications/{id}'
+                ]);
+                expect(Object.keys(res.body.paths['/v1/billing/summary'])).to.deep.equal(['get']);
+                expect(Object.keys(res.body.paths['/v1/email-verifications'])).to.deep.equal(['post']);
+                expect(Object.keys(res.body.paths['/v1/email-verifications/{id}'])).to.deep.equal(['get']);
+                expect(res.body.paths['/v1/email-verifications'].post.security).to.deep.include({ lef_session: [], 'x-csrf-token': [] });
+                var destination = res.body.paths['/v1/auth/login'].get.parameters.find(function(parameter) {
+                  return parameter.name === 'destination';
+                });
+                expect(destination.in).to.equal('query');
+                expect(destination.required).to.equal(false);
+                expect(destination.schema.type).to.equal('string');
+                expect(res.body.paths['/v1/auth/session'].get.operationId).to.equal('getCurrentAccount');
+                expect(res.body.paths['/v1/auth/logout'].post.security).to.deep.equal([
+                  { lef_session: [], 'x-csrf-token': [] }
+                ]);
+                expect(res.body.components.schemas.CurrentAccountContextDto.properties.email.nullable).to.equal(true);
+                expect(res.body.paths['/v1/auth/callback'].get['x-callback-error-codes']).to.deep.equal([
+                  'login_state_invalid', 'authorization_code_exchange_failed', 'active_membership_required'
+                ]);
+              });

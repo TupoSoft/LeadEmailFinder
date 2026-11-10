@@ -5,7 +5,7 @@ info:
 
 http:
   method: POST
-  url: "{{baseUrl}}/v1/organizations"
+  url: "{{baseUrl}}/v1/email-verifications"
   headers:
     - name: Content-Type
       value: application/json
@@ -15,7 +15,7 @@ http:
     type: json
     data: |-
       {
-        "name": "irrelevant", "ownerEmail": "irrelevant@example.test"
+        "email": "irrelevant@example.test"
       }
 
 runtime:

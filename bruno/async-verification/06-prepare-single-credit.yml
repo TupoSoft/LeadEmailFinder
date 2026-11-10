@@ -1,24 +1,20 @@
 info:
-    name: prepare-single-credit
+    name: require-single-verification-credit
     type: http
     seq: 6
 http:
-    method: PUT
-    url: '{{baseUrl}}/credits/{{organizationId}}'
+    method: GET
+    url: '{{baseUrl}}/v1/billing/summary'
     headers:
         - name: Authorization
-          value: 'Bearer {{platformToken}}'
-        - name: Content-Type
-          value: application/json
-    body:
-        type: json
-        data: |-
-            {"amount": 1}
+          value: 'Bearer {{customerToken}}'
 runtime:
     scripts:
         - type: tests
           code: |-
-              test('prepare-single-credit', function() {
+              test('require-single-verification-credit', function() {
+                // Provision the fixture balance outside the retired credit-administration HTTP surface.
                 expect(res.status).to.equal(200);
-                expect(res.body.balance).to.equal(1);
+                expect(res.body.available).to.be.at.least(1);
+                bru.setVar('singleVerificationStartingBalance', res.body.balance);
               });

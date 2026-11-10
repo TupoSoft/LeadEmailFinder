@@ -7,7 +7,7 @@ export function VerificationChargeDetails({
     billing,
     reason,
 }: {
-    billing?: components['schemas']['BatchStatusBillingDto']
+    billing?: components['schemas']['VerificationOperationBillingDto']
     reason?: string
 }) {
     const explanation =

@@ -13,7 +13,6 @@ import {
     SERVICE_CLIENT_GRANT_POLICY,
     ServiceClientGrantPolicy,
 } from '@tuposoft/lead-email-finder/modules/auth'
-import { ServiceClientsController } from './api/service-clients.controller'
 import { API_KEY_GENERATOR, ApiKeyGenerator } from './application/ports/api-key-generator'
 import { ServiceClientCreationService } from './application/service-client-creation.service'
 import { ServiceClientDeletionService } from './application/service-client-deletion.service'
@@ -24,7 +23,6 @@ import { generateApiKey } from './infrastructure/api-key-generator'
 
 @Module({
     imports: [IdentityModule, AuthModule],
-    controllers: [ServiceClientsController],
     providers: [
         RolePermissionPolicy,
         PermissionsGuard,
