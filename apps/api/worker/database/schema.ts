@@ -6,7 +6,6 @@ export const user = sqliteTable('users', {
     email: text('email').notNull().unique(),
     emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
     image: text('image'),
-    twoFactorEnabled: integer('two_factor_enabled', { mode: 'boolean' }).default(false),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 })
@@ -64,23 +63,4 @@ export const verification = sqliteTable(
         updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
     },
     table => [index('verifications_identifier_idx').on(table.identifier)],
-)
-
-export const twoFactor = sqliteTable(
-    'two_factors',
-    {
-        id: text('id').primaryKey(),
-        secret: text('secret').notNull(),
-        backupCodes: text('backup_codes').notNull(),
-        userId: text('user_id')
-            .notNull()
-            .references(() => user.id, { onDelete: 'cascade' }),
-        verified: integer('verified', { mode: 'boolean' }).default(true),
-        failedVerificationCount: integer('failed_verification_count').default(0),
-        lockedUntil: integer('locked_until', { mode: 'timestamp_ms' }),
-    },
-    table => [
-        index('two_factors_secret_idx').on(table.secret),
-        uniqueIndex('two_factors_user_id_uidx').on(table.userId),
-    ],
 )
