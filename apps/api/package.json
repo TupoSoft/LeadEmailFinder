@@ -10,14 +10,20 @@
         "name": "TupoSoft"
     },
     "scripts": {
-        "build": "nest build",
+        "build": "nest build && wrangler deploy --dry-run --outdir .wrangler/build",
         "start": "nest start -w",
         "debug": "nest start -w -d 0.0.0.0:9229",
         "test": "jest --config ../../jest.config.ts --testPathPatterns apps/api",
-        "typecheck": "tsc --noEmit -p tsconfig.json"
+        "pretypecheck": "wrangler types",
+        "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.worker.json",
+        "predev": "wrangler types && D1_LOCAL_TARGET=dev pnpm run db:sync",
+        "dev": "wrangler dev --persist-to .wrangler/state/dev",
+        "predb:push": "wrangler d1 execute DB --local --persist-to \".wrangler/state/${D1_LOCAL_TARGET-dev}\" --command \"SELECT 1\"",
+        "db:push": "drizzle-kit push --config=drizzle.config.ts --force",
+        "db:sync": "DRIZZLE_D1_RESET_SCHEMA=0 pnpm run db:push",
+        "db:reset": "DRIZZLE_D1_RESET_SCHEMA=1 pnpm run db:push && DRIZZLE_D1_RESET_SCHEMA=0 pnpm run db:push"
     },
     "dependencies": {
-        "@tuposoft/lead-email-finder-verification-contracts": "workspace:*",
         "@aws-sdk/client-s3": "^3.879.0",
         "@aws-sdk/lib-storage": "^3.879.0",
         "@nestjs/axios": "^4.0.1",
@@ -31,6 +37,7 @@
         "@nestjs/terminus": "^11.0.0",
         "@nestjs/typeorm": "^11.0.1",
         "@paddle/paddle-node-sdk": "^3.10.0",
+        "@tuposoft/lead-email-finder-verification-contracts": "workspace:*",
         "axios": "1.13.5",
         "better-auth": "1.7.11",
         "bullmq": "^5.58.4",
@@ -39,6 +46,7 @@
         "class-validator": "^0.14.2",
         "csv-parse": "^6.1.0",
         "csv-stringify": "^6.6.0",
+        "drizzle-orm": "^0.45.4",
         "express": "^5.1.0",
         "ioredis": "^5.7.0",
         "jose": "^5.10.0",
@@ -57,6 +65,7 @@
         "zod": "^4.1.5"
     },
     "devDependencies": {
+        "@libsql/client": "0.18.0",
         "@nestjs/cli": "^11.0.10",
         "@nestjs/schematics": "^11.0.7",
         "@nestjs/testing": "^11.1.6",
@@ -68,8 +77,10 @@
         "@types/node": "^26.6.6",
         "@types/nodemailer": "8.0.2",
         "@types/pg": "^8.20.0",
+        "drizzle-kit": "0.31.11",
         "ts-node": "^10.9.2",
         "tsconfig-paths": "4.2.0",
-        "typescript": "^5.9.2"
+        "typescript": "^5.9.2",
+        "wrangler": "4.159.0"
     }
 }

@@ -159,4 +159,6 @@ tmp
 
 # Cloudflare build output, local state, and secrets
 .cloudflare/
+.wrangler/
+/apps/api/worker-configuration.d.ts
 .dev.vars*

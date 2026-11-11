@@ -16,6 +16,8 @@
 **/.next
 **/.cache
 **/.cloudflare
+**/.wrangler
+**/worker-configuration.d.ts
 **/.dev.vars*
 **/.dev
 **/*.*proj.user

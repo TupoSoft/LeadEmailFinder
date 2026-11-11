@@ -22,11 +22,14 @@
         "test": "jest",
         "pretest:ci": "pnpm run build:contracts",
         "test:ci": "jest --runInBand",
-        "prelint": "pnpm run build:contracts",
+        "prelint": "pnpm run build:contracts && pnpm --filter @tuposoft/lead-email-finder-api exec wrangler types",
         "lint": "eslint .",
         "pretypecheck": "pnpm run build:contracts",
         "typecheck": "tsc --noEmit -p tsconfig.json && pnpm --filter @tuposoft/lead-email-finder-api typecheck && tsc --noEmit -p apps/mcp-server/tsconfig.json && pnpm --filter @tuposoft/lead-email-finder-worker typecheck",
-        "prepare": "husky || true"
+        "prepare": "husky || true",
+        "dev": "pnpm --filter @tuposoft/lead-email-finder-api dev",
+        "db:sync": "pnpm --filter @tuposoft/lead-email-finder-api db:sync",
+        "db:reset": "pnpm --filter @tuposoft/lead-email-finder-api db:reset"
     },
     "author": {
         "url": "https://tuposoft.com",
