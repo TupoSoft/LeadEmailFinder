@@ -4,6 +4,8 @@ Do not create or update `.md` files unless the user explicitly asks you to.
 
 Do not create tests unless the user explicitly asks you to.
 
+Do not create custom CLIs. Use existing tool CLIs and package scripts instead.
+
 Keep pull request descriptions short and to the point, without fluff.
 
 Write readable, well-spaced code. Avoid dense one-liners, nested ternaries, and compressed control flow.

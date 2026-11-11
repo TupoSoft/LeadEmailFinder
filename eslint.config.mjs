@@ -10,6 +10,9 @@ export default tseslint.config(
             'eslint.config.mjs',
             'apps/web/**',
             '**/dist/**',
+            '**/.cloudflare/**',
+            '**/.wrangler/**',
+            '**/worker-configuration.d.ts',
             '.dev/**',
             'deploy/**',
             '**/metadata.ts',
@@ -37,6 +40,15 @@ export default tseslint.config(
             'import/resolver': {
                 typescript: true,
                 node: true,
+            },
+        },
+    },
+    {
+        files: ['apps/api/worker/**/*.ts', 'apps/api/scripts/**/*.ts', 'apps/api/drizzle.config.ts'],
+        languageOptions: {
+            parserOptions: {
+                projectService: false,
+                project: './apps/api/tsconfig.worker.json',
             },
         },
     },

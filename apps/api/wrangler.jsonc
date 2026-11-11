@@ -1,0 +1,15 @@
+{
+    "$schema": "node_modules/wrangler/config-schema.json",
+    "name": "lead-email-finder-api",
+    "main": "worker/index.ts",
+    "compatibility_date": "2026-11-10",
+    "d1_databases": [
+        {
+            "binding": "DB",
+        },
+    ],
+    "observability": {
+        "enabled": true,
+        "traces": { "enabled": true },
+    },
+}
