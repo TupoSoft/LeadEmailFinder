@@ -21,6 +21,7 @@ if (databases.length !== 1) {
 
 const databasePath = databases[0]
 
+// noinspection JSUnusedGlobalSymbols
 export default defineConfig({
     dialect: 'sqlite',
     schema: process.env.DRIZZLE_D1_RESET_SCHEMA === '1' ? './scripts/empty-schema.ts' : './worker/database/schema.ts',
