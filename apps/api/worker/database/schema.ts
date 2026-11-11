@@ -1,6 +1,6 @@
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
-export const user = sqliteTable('better_auth_users', {
+export const user = sqliteTable('users', {
     id: text('id').primaryKey(),
     name: text('name').notNull(),
     email: text('email').notNull().unique(),
@@ -12,7 +12,7 @@ export const user = sqliteTable('better_auth_users', {
 })
 
 export const session = sqliteTable(
-    'better_auth_sessions',
+    'sessions',
     {
         id: text('id').primaryKey(),
         expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
@@ -25,11 +25,11 @@ export const session = sqliteTable(
         createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
         updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
     },
-    table => [index('better_auth_sessions_user_id_idx').on(table.userId)],
+    table => [index('sessions_user_id_idx').on(table.userId)],
 )
 
 export const account = sqliteTable(
-    'better_auth_accounts',
+    'accounts',
     {
         id: text('id').primaryKey(),
         accountId: text('account_id').notNull(),
@@ -48,13 +48,13 @@ export const account = sqliteTable(
         updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
     },
     table => [
-        index('better_auth_accounts_user_id_idx').on(table.userId),
-        uniqueIndex('better_auth_accounts_provider_account_uidx').on(table.providerId, table.accountId),
+        index('accounts_user_id_idx').on(table.userId),
+        uniqueIndex('accounts_provider_account_uidx').on(table.providerId, table.accountId),
     ],
 )
 
 export const verification = sqliteTable(
-    'better_auth_verifications',
+    'verifications',
     {
         id: text('id').primaryKey(),
         identifier: text('identifier').notNull(),
@@ -63,11 +63,11 @@ export const verification = sqliteTable(
         createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
         updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
     },
-    table => [index('better_auth_verifications_identifier_idx').on(table.identifier)],
+    table => [index('verifications_identifier_idx').on(table.identifier)],
 )
 
 export const twoFactor = sqliteTable(
-    'better_auth_two_factors',
+    'two_factors',
     {
         id: text('id').primaryKey(),
         secret: text('secret').notNull(),
@@ -80,7 +80,7 @@ export const twoFactor = sqliteTable(
         lockedUntil: integer('locked_until', { mode: 'timestamp_ms' }),
     },
     table => [
-        index('better_auth_two_factors_secret_idx').on(table.secret),
-        uniqueIndex('better_auth_two_factors_user_id_uidx').on(table.userId),
+        index('two_factors_secret_idx').on(table.secret),
+        uniqueIndex('two_factors_user_id_uidx').on(table.userId),
     ],
 )
