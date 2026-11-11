@@ -9,7 +9,8 @@ if (target !== 'dev' && target !== 'test') {
     throw new Error('D1_LOCAL_TARGET must be dev or test.')
 }
 
-const directory = resolve('.wrangler/state', target, 'v3/d1')
+const persistenceDirectory = target === 'test' ? '.wrangler/state/test' : '.wrangler/state'
+const directory = resolve(persistenceDirectory, 'v3/d1')
 const databases = readdirSync(directory, { recursive: true, withFileTypes: true })
     .filter(entry => entry.isFile() && entry.name.endsWith('.sqlite') && entry.name !== 'metadata.sqlite')
     .map(entry => join(entry.parentPath, entry.name))
