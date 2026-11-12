@@ -12,10 +12,13 @@ http:
         type: json
         data: '{}'
 runtime:
-    scripts:
-        - type: tests
-          code: |-
-              test('requires exact Origin even without a session', function() {
-                expect(res.status).to.equal(403);
-                expect(res.body).to.deep.equal({ code: 'origin_not_allowed' });
-              });
+    assertions:
+        - expression: res.status
+          operator: eq
+          value: '403'
+        - expression: res.body.code
+          operator: eq
+          value: origin_not_allowed
+        - expression: Object.keys(res.body)
+          operator: length
+          value: '1'

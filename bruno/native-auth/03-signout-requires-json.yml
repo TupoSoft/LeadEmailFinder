@@ -14,10 +14,13 @@ http:
         type: text
         data: '{}'
 runtime:
-    scripts:
-        - type: tests
-          code: |-
-              test('rejects simple cross-site form content types', function() {
-                expect(res.status).to.equal(415);
-                expect(res.body).to.deep.equal({ code: 'json_required' });
-              });
+    assertions:
+        - expression: res.status
+          operator: eq
+          value: '415'
+        - expression: res.body.code
+          operator: eq
+          value: json_required
+        - expression: Object.keys(res.body)
+          operator: length
+          value: '1'

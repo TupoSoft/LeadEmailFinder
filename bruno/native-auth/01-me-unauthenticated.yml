@@ -6,11 +6,16 @@ http:
     method: GET
     url: '{{baseUrl}}/v1/me'
 runtime:
-    scripts:
-        - type: tests
-          code: |-
-              test('rejects missing authentication without exposing session data', function() {
-                expect(res.status).to.equal(401);
-                expect(res.body).to.deep.equal({ code: 'authentication_required' });
-                expect(res.headers['cache-control']).to.equal('no-store');
-              });
+    assertions:
+        - expression: res.status
+          operator: eq
+          value: '401'
+        - expression: res.body.code
+          operator: eq
+          value: authentication_required
+        - expression: Object.keys(res.body)
+          operator: length
+          value: '1'
+        - expression: res.headers['cache-control']
+          operator: eq
+          value: no-store
