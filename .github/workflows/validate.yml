@@ -55,6 +55,8 @@ jobs:
         run: corepack pnpm typecheck
       - name: Test
         run: corepack pnpm test:ci
+      - name: Test D1 authentication sessions
+        run: corepack pnpm --filter @tuposoft/lead-email-finder-api test:worker
       - name: Test empty-database synchronization
         env:
           TEST_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/lef_identity_test

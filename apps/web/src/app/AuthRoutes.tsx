@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { Link, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../features/auth/use-auth'
-import { safeDestination, signInHref } from '../features/auth/destination'
+import { safeDestination } from '../features/auth/destination'
 import { notFoundCopy } from '../content/public-entry'
 import { authCopy } from '../content/auth-shell'
 import { StateMessage } from '../shared/StateMessage'
@@ -10,23 +10,15 @@ import { ApplicationFrame } from './ApplicationFrame'
 
 const recoveryPaths = new Set(['/app/session-expired', '/app/account-unavailable', '/app/forbidden'])
 
-function SignInLink({ destination, secondary = false }: { destination: string; secondary?: boolean }) {
+function SessionCheck() {
+    const { bootstrap } = useAuth()
     return (
-        <a className={`${action.action} ${secondary ? action.secondary : ''}`} href={signInHref(destination)}>
-            {authCopy.signIn}
-        </a>
-    )
-}
-
-function StartSignIn({ destination }: { destination: string }) {
-    const href = signInHref(destination)
-    useEffect(() => {
-        window.location.replace(href)
-    }, [href])
-    return (
-        <StateMessage {...authCopy.signingIn} pending>
-            <SignInLink destination={destination} />
-        </StateMessage>
+        <>
+            <p>{authCopy.signInUnavailable}</p>
+            <button className={action.action} type="button" onClick={() => void bootstrap()}>
+                {authCopy.checkSession}
+            </button>
+        </>
     )
 }
 
@@ -57,10 +49,12 @@ export function ProtectedApplication() {
                         ? authCopy.accountUnavailable
                         : authCopy.expired)}
                 >
-                    <SignInLink destination={destination} />
+                    <SessionCheck />
                 </StateMessage>
             ) : (
-                <StartSignIn destination={destination} />
+                <StateMessage {...authCopy.signedOut}>
+                    <SessionCheck />
+                </StateMessage>
             )
             break
         case 'session-expired':
@@ -69,7 +63,7 @@ export function ProtectedApplication() {
                     <Navigate replace to={`/app/session-expired?destination=${encodeURIComponent(destination)}`} />
                 ) : (
                     <StateMessage {...authCopy.expired}>
-                        <SignInLink destination={destination} />
+                        <SessionCheck />
                     </StateMessage>
                 )
             break
@@ -79,7 +73,7 @@ export function ProtectedApplication() {
                     <Navigate replace to={`/app/account-unavailable?destination=${encodeURIComponent(destination)}`} />
                 ) : (
                     <StateMessage {...authCopy.accountUnavailable}>
-                        <SignInLink destination={destination} />
+                        <SessionCheck />
                     </StateMessage>
                 )
             break
@@ -98,7 +92,7 @@ export function ProtectedApplication() {
         case 'signed-out':
             content = (
                 <StateMessage {...authCopy.signedOut}>
-                    <SignInLink destination="/app" />
+                    <SessionCheck />
                 </StateMessage>
             )
             break
@@ -108,7 +102,7 @@ export function ProtectedApplication() {
                     <button type="button" className={action.action} onClick={() => void signOut()}>
                         {authCopy.retrySignOut}
                     </button>
-                    <SignInLink destination={destination} secondary />
+                    <SessionCheck />
                 </StateMessage>
             )
             break
@@ -133,10 +127,9 @@ export function ProtectedApplication() {
 }
 
 export function SessionExpiredPage() {
-    const destination = safeDestination(new URLSearchParams(useLocation().search).get('destination'))
     return (
         <StateMessage {...authCopy.expired}>
-            <SignInLink destination={destination} />
+            <SessionCheck />
         </StateMessage>
     )
 }
@@ -144,7 +137,7 @@ export function SessionExpiredPage() {
 export function AccountUnavailablePage() {
     return (
         <StateMessage {...authCopy.accountUnavailable}>
-            <SignInLink destination="/app" />
+            <SessionCheck />
         </StateMessage>
     )
 }
@@ -162,15 +155,13 @@ export function ForbiddenPage() {
 export function CallbackErrorPage() {
     const code = new URLSearchParams(useLocation().search).get('code')
     const description =
-        code === 'login_state_invalid' ||
-        code === 'authorization_code_exchange_failed' ||
-        code === 'active_membership_required'
+        code === 'login_state_invalid' || code === 'authorization_code_exchange_failed'
             ? authCopy.callback[code]
             : authCopy.callback.unknown
     return (
         <ApplicationFrame>
             <StateMessage title={authCopy.callback.title} description={description}>
-                <SignInLink destination="/app" />
+                <SessionCheck />
             </StateMessage>
         </ApplicationFrame>
     )

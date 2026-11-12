@@ -206,20 +206,6 @@
         ],
         "type": "object"
       },
-      "AuthenticationRequiredResponseDto": {
-        "properties": {
-          "code": {
-            "enum": [
-              "authentication_required"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "code"
-        ],
-        "type": "object"
-      },
       "BillingSummaryResponseDto": {
         "properties": {
           "available": {
@@ -245,117 +231,42 @@
         ],
         "type": "object"
       },
-      "CurrentAccountContextDto": {
+      "CurrentUserResponseDto": {
+        "additionalProperties": false,
         "properties": {
-          "capabilities": {
-            "description": "Presentation-only browser capabilities.",
-            "items": {
-              "enum": [
-                "verification.run",
-                "verification.read",
-                "team.manage",
-                "service_clients.manage",
-                "billing.read",
-                "billing.manage",
-                "platform.organizations.manage",
-                "platform.credits.manage",
-                "platform.proxies.manage"
-              ],
-              "type": "string"
+          "user": {
+            "additionalProperties": false,
+            "properties": {
+              "email": {
+                "format": "email",
+                "type": "string"
+              },
+              "emailVerified": {
+                "type": "boolean"
+              },
+              "id": {
+                "type": "string"
+              },
+              "image": {
+                "nullable": true,
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
             },
-            "type": "array"
-          },
-          "email": {
-            "description": "Current external-identity email, or null when the provider has no email.",
-            "example": "owner@example.test",
-            "format": "email",
-            "nullable": true,
-            "type": "string"
-          },
-          "grantableServiceClientPermissions": {
-            "description": "Ordered permissions this human account may grant to a service client.",
-            "items": {
-              "enum": [
-                "verification:run",
-                "verification:read",
-                "members:manage",
-                "credentials:manage",
-                "billing:read",
-                "billing:manage"
-              ],
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "membership": {
-            "$ref": "#/components/schemas/CurrentAccountMembershipDto"
-          },
-          "organization": {
-            "$ref": "#/components/schemas/CurrentAccountOrganizationDto"
-          }
-        },
-        "required": [
-          "email",
-          "membership",
-          "organization",
-          "capabilities",
-          "grantableServiceClientPermissions"
-        ],
-        "type": "object"
-      },
-      "CurrentAccountMembershipDto": {
-        "properties": {
-          "id": {
-            "description": "Active organization membership identifier.",
-            "format": "uuid",
-            "type": "string"
-          },
-          "role": {
-            "description": "Role of the active organization membership.",
-            "enum": [
-              "platform_admin",
-              "owner",
-              "admin",
-              "member"
+            "required": [
+              "id",
+              "name",
+              "email",
+              "emailVerified",
+              "image"
             ],
-            "type": "string"
+            "type": "object"
           }
         },
         "required": [
-          "id",
-          "role"
-        ],
-        "type": "object"
-      },
-      "CurrentAccountOrganizationDto": {
-        "properties": {
-          "id": {
-            "description": "Active organization identifier.",
-            "format": "uuid",
-            "type": "string"
-          },
-          "name": {
-            "description": "Display name of the active organization.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "name"
-        ],
-        "type": "object"
-      },
-      "HumanSessionRequiredResponseDto": {
-        "properties": {
-          "code": {
-            "enum": [
-              "human_session_required"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "code"
+          "user"
         ],
         "type": "object"
       },
@@ -465,20 +376,10 @@
       }
     },
     "securitySchemes": {
-      "lef_session": {
+      "native_session": {
+        "description": "D1-backed HttpOnly, SameSite=Lax session. HTTPS uses __Secure-better-auth.session_token and Secure.",
         "in": "cookie",
-        "name": "lef_session",
-        "type": "apiKey"
-      },
-      "oidc": {
-        "bearerFormat": "API key",
-        "scheme": "bearer",
-        "type": "http"
-      },
-      "x-csrf-token": {
-        "description": "The decoded lef_csrf_token cookie value, supplied by the browser transport on unsafe methods.",
-        "in": "header",
-        "name": "x-csrf-token",
+        "name": "better-auth.session_token",
         "type": "apiKey"
       }
     }
@@ -688,197 +589,13 @@
         ]
       }
     },
-    "/v1/auth/callback": {
-      "get": {
-        "description": "Consumes one pending Authorization Code with PKCE response. Success returns to the validated pending /app destination; recoverable failures return to the same-origin error route with a stable safe code.",
-        "operationId": "completeBrowserAuthorization",
-        "parameters": [
-          {
-            "description": "One-time login state. Missing, blank, repeated, expired, or mismatched values fail safely.",
-            "in": "query",
-            "name": "state",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Provider authorization code. Missing, blank, or repeated values follow the safe redirect policy.",
-            "in": "query",
-            "name": "code",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "302": {
-            "description": "Redirects to the validated pending /app destination after success, or to /auth/error with code login_state_invalid, authorization_code_exchange_failed, or active_membership_required.",
-            "headers": {
-              "Cache-Control": {
-                "description": "Prevents storage of the authorization response.",
-                "schema": {
-                  "enum": [
-                    "no-store"
-                  ],
-                  "type": "string"
-                }
-              },
-              "Location": {
-                "description": "Same-origin application or stable callback-error URL.",
-                "schema": {
-                  "format": "uri",
-                  "type": "string"
-                }
-              },
-              "Referrer-Policy": {
-                "description": "Prevents callback parameters from being sent as referrer data.",
-                "schema": {
-                  "enum": [
-                    "no-referrer"
-                  ],
-                  "type": "string"
-                }
-              },
-              "Set-Cookie": {
-                "description": "Expires the transient login-state cookie. A successful callback also sets the session and CSRF cookies.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "An unexpected provider, infrastructure, or application failure occurred without exposing detail.",
-            "headers": {
-              "Cache-Control": {
-                "description": "Prevents storage of the authorization response.",
-                "schema": {
-                  "enum": [
-                    "no-store"
-                  ],
-                  "type": "string"
-                }
-              },
-              "Referrer-Policy": {
-                "description": "Prevents callback parameters from being sent as referrer data.",
-                "schema": {
-                  "enum": [
-                    "no-referrer"
-                  ],
-                  "type": "string"
-                }
-              },
-              "Set-Cookie": {
-                "description": "Expires the transient login-state cookie. A successful callback also sets the session and CSRF cookies.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "The provider ID token failed integrity or claim validation. The response contains no provider detail.",
-            "headers": {
-              "Cache-Control": {
-                "description": "Prevents storage of the authorization response.",
-                "schema": {
-                  "enum": [
-                    "no-store"
-                  ],
-                  "type": "string"
-                }
-              },
-              "Referrer-Policy": {
-                "description": "Prevents callback parameters from being sent as referrer data.",
-                "schema": {
-                  "enum": [
-                    "no-referrer"
-                  ],
-                  "type": "string"
-                }
-              },
-              "Set-Cookie": {
-                "description": "Expires the transient login-state cookie. A successful callback also sets the session and CSRF cookies.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "security": [],
-        "summary": "Complete browser authorization",
-        "tags": [
-          "BffSession"
-        ],
-        "x-callback-error-codes": [
-          "login_state_invalid",
-          "authorization_code_exchange_failed",
-          "active_membership_required"
-        ]
-      }
-    },
-    "/v1/auth/login": {
-      "get": {
-        "operationId": "loginBrowserSession",
-        "parameters": [
-          {
-            "description": "Relative application destination under /app. Unsafe, malformed, public, or recovery paths fall back to /app.",
-            "in": "query",
-            "name": "destination",
-            "required": false,
-            "schema": {
-              "example": "/app/verification?view=recent",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "302": {
-            "description": "Redirects to the public Keycloak authorization endpoint with a PKCE S256 challenge.",
-            "headers": {
-              "Location": {
-                "description": "Provider authorization URL.",
-                "schema": {
-                  "format": "uri",
-                  "type": "string"
-                }
-              },
-              "Set-Cookie": {
-                "description": "Sets the transient HttpOnly lef_login_state cookie and clears unusable session and CSRF cookies.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "security": [],
-        "summary": "Start browser authorization",
-        "tags": [
-          "BffSession"
-        ]
-      }
-    },
-    "/v1/auth/logout": {
+    "/v1/auth/sign-out": {
       "post": {
-        "description": "Revokes the session and clears its cookies. Cookie-authenticated requests require a matching application Origin (or Referer) and the decoded lef_csrf_token cookie value in x-csrf-token.",
-        "operationId": "logoutBrowserSession",
+        "description": "Revokes the D1 session and expires its cookies. Requires the exact application Origin and application/json. Repeating sign-out without a current session succeeds.",
+        "operationId": "signOut",
         "parameters": [
           {
-            "description": "Fallback URL for checking the application origin when Origin is absent.",
-            "in": "header",
-            "name": "Referer",
-            "required": false,
-            "schema": {
-              "format": "uri",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Must match the application origin. A same-origin Referer is accepted when Origin is absent.",
+            "description": "Required by the server and supplied automatically by browsers. Must exactly equal the configured application origin; Referer is not a fallback.",
             "in": "header",
             "name": "Origin",
             "required": false,
@@ -888,122 +605,150 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
-          "204": {
-            "description": "The session is revoked; the lef_session and lef_csrf_token cookies are cleared.",
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "success": {
+                      "enum": [
+                        true
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The current session is revoked and cookies are expired.",
             "headers": {
+              "Cache-Control": {
+                "description": "Prevents caching protected identity.",
+                "schema": {
+                  "type": "string"
+                }
+              },
               "Set-Cookie": {
-                "description": "Expires the session and CSRF cookies.",
+                "description": "Preserves session renewal or expiration cookies.",
                 "schema": {
                   "type": "string"
                 }
               }
             }
           },
-          "401": {
+          "400": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AuthenticationRequiredResponseDto"
-                }
-              }
-            },
-            "description": "Authentication is missing, invalid, or expired."
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
+                  "additionalProperties": false,
                   "properties": {
-                    "error": {
+                    "code": {
                       "enum": [
-                        "Forbidden"
+                        "invalid_request"
                       ],
                       "type": "string"
-                    },
-                    "message": {
-                      "enum": [
-                        "Request origin is not allowed",
-                        "CSRF token is missing or invalid"
-                      ],
-                      "type": "string"
-                    },
-                    "statusCode": {
-                      "enum": [
-                        403
-                      ],
-                      "type": "integer"
                     }
                   },
                   "required": [
-                    "statusCode",
-                    "message",
-                    "error"
+                    "code"
                   ],
                   "type": "object"
                 }
               }
             },
-            "description": "The cookie-authenticated request has a missing or invalid Origin, Referer, or CSRF token."
-          }
-        },
-        "security": [
-          {
-            "lef_session": [],
-            "x-csrf-token": []
-          }
-        ],
-        "summary": "End the browser session",
-        "tags": [
-          "BffSession"
-        ]
-      }
-    },
-    "/v1/auth/session": {
-      "get": {
-        "description": "Returns browser-safe identity, membership, organization, capability, and service-client grant data for an authenticated human session.",
-        "operationId": "getCurrentAccount",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CurrentAccountContextDto"
-                }
-              }
-            },
-            "description": "Current browser account context."
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthenticationRequiredResponseDto"
-                }
-              }
-            },
-            "description": "Authentication is missing, invalid, expired, or no longer maps to a usable account."
+            "description": "The JSON body must be an empty object."
           },
           "403": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HumanSessionRequiredResponseDto"
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "origin_not_allowed"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code"
+                  ],
+                  "type": "object"
                 }
               }
             },
-            "description": "The authenticated credential is a service client rather than a human session."
+            "description": "Origin is missing or does not exactly match the application origin."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "json_required"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Content-Type must be application/json."
+          },
+          "429": {
+            "description": "The persistent authentication rate limit was exceeded."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "sign_out_failed"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Session revocation could not be confirmed; retry sign-out."
           }
         },
-        "security": [
-          {
-            "lef_session": []
-          }
-        ],
-        "summary": "Read the current browser account",
+        "security": [],
+        "summary": "Revoke the current browser session",
         "tags": [
-          "BffSession"
+          "Authentication"
         ]
       }
     },
@@ -1031,10 +776,7 @@
         },
         "security": [
           {
-            "lef_session": []
-          },
-          {
-            "oidc": []
+            "native_session": []
           }
         ],
         "summary": "",
@@ -1047,7 +789,18 @@
       "post": {
         "description": "Admits one email for the authenticated organization through the durable admission stack. A fresh, uncached submission reserves one credit; a cached or shared result costs nothing. An optional canonical lowercase UUIDv7 Idempotency-Key header lets a caller safely retry an uncertain submission. Browser sessions require same-origin mutation protection.",
         "operationId": "AsyncEmailVerificationController_verifyAsync",
-        "parameters": [],
+        "parameters": [
+          {
+            "description": "Required by the server and supplied automatically by browsers. Must exactly equal the configured application origin; Referer is not a fallback.",
+            "in": "header",
+            "name": "Origin",
+            "required": false,
+            "schema": {
+              "format": "uri",
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1167,34 +920,7 @@
             "description": "The organization has insufficient credits; no execution was funded."
           },
           "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "example": {
-                    "error": "Forbidden",
-                    "message": "Missing required permission",
-                    "statusCode": 403
-                  },
-                  "properties": {
-                    "code": {
-                      "type": "string"
-                    },
-                    "error": {
-                      "type": "string"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "statusCode": {
-                      "example": 403,
-                      "type": "integer"
-                    }
-                  },
-                  "type": "object"
-                }
-              }
-            },
-            "description": "The required verification permission or browser mutation protection is missing."
+            "description": "Email verification or exact application Origin is required."
           },
           "409": {
             "content": {
@@ -1246,6 +972,9 @@
             },
             "description": "The supplied Idempotency-Key is more than 24 hours old."
           },
+          "415": {
+            "description": "Content-Type must be application/json."
+          },
           "429": {
             "content": {
               "application/json": {
@@ -1274,11 +1003,7 @@
         },
         "security": [
           {
-            "lef_session": [],
-            "x-csrf-token": []
-          },
-          {
-            "oidc": []
+            "native_session": []
           }
         ],
         "summary": "",
@@ -1531,15 +1256,97 @@
         },
         "security": [
           {
-            "lef_session": []
-          },
-          {
-            "oidc": []
+            "native_session": []
           }
         ],
         "summary": "",
         "tags": [
           "Verification"
+        ]
+      }
+    },
+    "/v1/me": {
+      "get": {
+        "description": "Returns only public user fields. Session tokens, IP addresses, user agents, and provider credentials are never returned. Sessions expire after seven days and renew daily.",
+        "operationId": "getCurrentUser",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentUserResponseDto"
+                }
+              }
+            },
+            "description": "Verified current user.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents caching protected identity.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Set-Cookie": {
+                "description": "Preserves session renewal or expiration cookies.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "authentication_required"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Authentication is missing, expired, or revoked."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "email_verification_required"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The current user has not verified their email."
+          }
+        },
+        "security": [
+          {
+            "native_session": []
+          }
+        ],
+        "summary": "Read the verified current user",
+        "tags": [
+          "Authentication"
         ]
       }
     }
@@ -1549,5 +1356,9 @@
       "url": "/"
     }
   ],
-  "tags": []
+  "tags": [
+    {
+      "name": "Authentication"
+    }
+  ]
 }

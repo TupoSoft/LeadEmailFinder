@@ -30,11 +30,7 @@ afterEach(() => {
 })
 
 const account: CurrentAccount = {
-    email: 'owner@example.test',
-    membership: { id: 'owner-a', role: 'owner' },
-    organization: { id: 'organization-a', name: 'Example workspace' },
-    capabilities: ['verification.run', 'verification.read', 'billing.read'],
-    grantableServiceClientPermissions: [],
+    user: { id: 'user-a', name: 'Example user', email: 'owner@example.test', emailVerified: true, image: null },
 }
 const jobId = '12345678-1234-4234-8234-123456789012'
 const createPath = '/v1/email-verifications'
@@ -70,28 +66,25 @@ function deferred<T>() {
 
 function renderVerification({
     path = formRoute,
-    capabilities = account.capabilities,
     intercept,
 }: {
     path?: string
-    capabilities?: CurrentAccount['capabilities']
     intercept?: (request: Request) => Response | Promise<Response> | undefined
 } = {}) {
     const fetch = vi.fn((request: Request) => {
         const custom = intercept?.(request)
         if (custom !== undefined) return Promise.resolve(custom)
         const path = new URL(request.url).pathname
-        if (path === '/v1/auth/session') return Promise.resolve(Response.json({ ...account, capabilities }))
+        if (path === '/v1/me') return Promise.resolve(Response.json(account))
         if (path === createPath && request.method === 'POST')
             return Promise.resolve(Response.json({ id: jobId }, { status: 202 }))
         if (path === statusPath) return Promise.resolve(Response.json({ state: 'queued' }))
-        if (path === '/v1/auth/logout') return Promise.resolve(new Response(null, { status: 204 }))
+        if (path === '/v1/auth/sign-out') return Promise.resolve(Response.json({ success: true }))
         return Promise.resolve(new Response(null, { status: 404 }))
     })
     const session = new AuthSession({
         fetch,
         channelFactory: () => null,
-        readCookies: () => 'lef_csrf_token=csrf-fixture',
     })
     const router = createMemoryRouter(
         [
@@ -135,12 +128,10 @@ async function submit() {
 }
 
 describe('single verification submission', () => {
-    it('hides the submission form and navigation without the run capability', async () => {
-        const { fetch } = renderVerification({ capabilities: ['verification.read'] })
-        expect(await screen.findByRole('heading', { name: 'Access denied' })).toBeInTheDocument()
-        expect(screen.queryByRole('link', { name: 'Verify an email' })).not.toBeInTheDocument()
-        expect(screen.queryByRole('textbox', { name: 'Email address' })).not.toBeInTheDocument()
-        expect(requestsFor(fetch, createPath, 'POST')).toHaveLength(0)
+    it('offers submission and navigation for a verified personal account', async () => {
+        renderVerification()
+        expect(await screen.findByRole('textbox', { name: 'Email address' })).toBeInTheDocument()
+        expect(screen.getByRole('link', { name: /Verify an email/ })).toBeInTheDocument()
     })
 
     it('focuses an associated invalid email error without submitting', async () => {
@@ -169,7 +160,8 @@ describe('single verification submission', () => {
         expect(router.state.location.pathname).toBe(formRoute)
         const request = requestsFor(fetch, createPath, 'POST')[0]
         expect(await request.clone().json()).toEqual({ email: result.email })
-        expect(request.headers.get('x-csrf-token')).toBe('csrf-fixture')
+        expect(request.headers.get('content-type')).toBe('application/json')
+        expect(request.headers.has('x-csrf-token')).toBe(false)
         expect(request.headers.get('Idempotency-Key')).toMatch(
             /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
         )
@@ -238,20 +230,14 @@ describe('single verification submission', () => {
         expect(await corrected.clone().json()).toEqual({ email: result.email })
     })
 
-    it.each([true, false])('handles insufficient credit with billing access %s', async canReadBilling => {
+    it('offers billing recovery after insufficient credit', async () => {
         renderVerification({
-            capabilities: canReadBilling ? account.capabilities : ['verification.run', 'verification.read'],
             intercept: request => (request.method === 'POST' ? new Response(null, { status: 402 }) : undefined),
         })
         await submit()
         expect(await screen.findByRole('heading', { name: 'Insufficient credits' })).toBeInTheDocument()
         expect(screen.getByRole('textbox', { name: 'Email address' })).toHaveValue(result.email)
-        if (canReadBilling)
-            expect(screen.getAllByRole('link').some(link => link.getAttribute('href') === '/app/billing')).toBe(true)
-        else {
-            expect(screen.getByText(/contact.*owner/i)).toBeInTheDocument()
-            expect(screen.getAllByRole('link').some(link => link.getAttribute('href') === '/app/billing')).toBe(false)
-        }
+        expect(screen.getAllByRole('link').some(link => link.getAttribute('href') === '/app/billing')).toBe(true)
     })
 
     it.each([0, 500, 504])(
@@ -375,18 +361,15 @@ describe('single verification submission', () => {
             intercept: request => {
                 const path = new URL(request.url).pathname
                 if (path === createPath) return delayed.promise
-                if (path === '/v1/auth/session' && replacement)
+                if (path === '/v1/me' && replacement)
                     return Response.json({
                         ...account,
-                        membership: { ...account.membership, id: 'owner-b' },
-                        organization: { ...account.organization, id: 'organization-b' },
+                        user: { ...account.user, id: 'user-b' },
                     })
             },
         })
         await submit()
-        expect(
-            session.queryClient.getQueryData(verificationQueryKeys.submission(account.organization.id)),
-        ).toMatchObject({
+        expect(session.queryClient.getQueryData(verificationQueryKeys.submission(account.user.id))).toMatchObject({
             phase: 'pending',
             request: { email: result.email },
         })
@@ -398,9 +381,7 @@ describe('single verification submission', () => {
             await delayed.promise
         })
         expect(router.state.location.pathname).toBe(formRoute)
-        expect(
-            session.queryClient.getQueryData(verificationQueryKeys.submission(account.organization.id)),
-        ).toBeUndefined()
+        expect(session.queryClient.getQueryData(verificationQueryKeys.submission(account.user.id))).toBeUndefined()
         expect(requestsFor(fetch, statusPath)).toHaveLength(0)
     })
 
@@ -438,9 +419,7 @@ describe('single verification submission', () => {
         })
         expect(await screen.findByRole('heading', { name: 'You are signed out' })).toBeInTheDocument()
         expect(router.state.location.pathname).toBe(formRoute)
-        expect(
-            session.queryClient.getQueryData(verificationQueryKeys.submission(account.organization.id)),
-        ).toBeUndefined()
+        expect(session.queryClient.getQueryData(verificationQueryKeys.submission(account.user.id))).toBeUndefined()
         expect(session.queryClient.getMutationCache().getAll()).toHaveLength(0)
         expect(requestsFor(fetch, statusPath)).toHaveLength(0)
     })
@@ -480,9 +459,7 @@ describe('single verification job status', () => {
             expect(screen.getByRole('region', { name: 'Verification charges' })).toHaveAttribute('aria-live', 'polite')
             await waitFor(() => expect(requestsFor(fetch, '/v1/billing/summary')).toHaveLength(1))
             expect(
-                JSON.stringify(
-                    session.queryClient.getQueryData(verificationQueryKeys.job(account.organization.id, jobId)),
-                ),
+                JSON.stringify(session.queryClient.getQueryData(verificationQueryKeys.job(account.user.id, jobId))),
             ).not.toContain('private-provider-detail')
         },
     )
@@ -585,18 +562,18 @@ describe('single verification job status', () => {
         expect(requestsFor(fetch, createPath, 'POST')).toHaveLength(1)
     })
 
-    it('does not request job data without the read capability', async () => {
-        const { fetch } = renderVerification({ path: jobRoute, capabilities: ['verification.run'] })
-        expect(await screen.findByRole('heading', { name: 'Access denied' })).toBeInTheDocument()
-        expect(requestsFor(fetch, statusPath)).toHaveLength(0)
+    it('requests personal job data for a verified user', async () => {
+        const { fetch } = renderVerification({ path: jobRoute })
+        expect(await screen.findByRole('heading', { name: 'Verification queued' })).toBeInTheDocument()
+        expect(requestsFor(fetch, statusPath)).toHaveLength(1)
     })
 
-    it('restores the bookmarked job using only its organization-scoped status query', async () => {
+    it('restores the bookmarked job using only its user-scoped status query', async () => {
         const { fetch, session } = renderVerification({ path: jobRoute })
         expect(await screen.findByRole('heading', { name: 'Verification queued' })).toBeInTheDocument()
         expect(requestsFor(fetch, statusPath)).toHaveLength(1)
         expect(requestsFor(fetch, createPath, 'POST')).toHaveLength(0)
-        expect(session.queryClient.getQueryData(verificationQueryKeys.job(account.organization.id, jobId))).toEqual({
+        expect(session.queryClient.getQueryData(verificationQueryKeys.job(account.user.id, jobId))).toEqual({
             state: 'queued',
         })
     })
@@ -607,7 +584,7 @@ describe('single verification job status', () => {
         expect(requestsFor(fetch, `${createPath}/not-a-uuid`)).toHaveLength(0)
     })
 
-    it('renders an organization-concealed 404 without details or automatic resubmission', async () => {
+    it('renders an user-concealed 404 without details or automatic resubmission', async () => {
         const { fetch } = renderVerification({
             path: jobRoute,
             intercept: request =>
@@ -738,9 +715,7 @@ describe('single verification job status', () => {
         expect(screen.getByText('Last confirmed status: Verification completed')).toBeInTheDocument()
         expect(screen.getByText(result.email)).toBeInTheDocument()
         expect(refresh).toHaveFocus()
-        expect(
-            session.queryClient.getQueryData(verificationQueryKeys.job(account.organization.id, jobId)),
-        ).toMatchObject({
+        expect(session.queryClient.getQueryData(verificationQueryKeys.job(account.user.id, jobId))).toMatchObject({
             state: 'completed',
             result,
         })
@@ -784,17 +759,16 @@ describe('single verification job status', () => {
         expect(refresh).toHaveFocus()
     })
 
-    it('supports read-only viewers and renders an honest empty source list', async () => {
+    it('renders an honest empty source list', async () => {
         renderVerification({
             path: jobRoute,
-            capabilities: ['verification.read'],
             intercept: request =>
                 new URL(request.url).pathname === statusPath
                     ? Response.json({ state: 'completed', result: { ...result, sources: [] } })
                     : undefined,
         })
         expect(await screen.findByText('No sources reported')).toBeInTheDocument()
-        expect(screen.queryByRole('link', { name: 'Verify another email' })).not.toBeInTheDocument()
+        expect(screen.getByRole('link', { name: 'Verify another email' })).toBeInTheDocument()
         expect(screen.getByRole('button', { name: 'Refresh status' })).toBeEnabled()
     })
 
@@ -812,9 +786,7 @@ describe('single verification job status', () => {
         })
         expect(await screen.findByRole('heading', { name: 'You are signed out' })).toBeInTheDocument()
         expect(screen.queryByText(result.email)).not.toBeInTheDocument()
-        expect(
-            session.queryClient.getQueryData(verificationQueryKeys.job(account.organization.id, jobId)),
-        ).toBeUndefined()
+        expect(session.queryClient.getQueryData(verificationQueryKeys.job(account.user.id, jobId))).toBeUndefined()
     })
 
     it.each([
@@ -914,7 +886,7 @@ describe('single verification job status', () => {
         ])
             expect(screen.getByText(label)).toBeInTheDocument()
         expect(
-            JSON.stringify(session.queryClient.getQueryData(verificationQueryKeys.job(account.organization.id, jobId))),
+            JSON.stringify(session.queryClient.getQueryData(verificationQueryKeys.job(account.user.id, jobId))),
         ).not.toMatch(/private-/)
         expect(document.body.textContent).not.toMatch(/private-/)
     })

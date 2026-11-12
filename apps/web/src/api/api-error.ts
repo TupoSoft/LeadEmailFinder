@@ -51,7 +51,7 @@ export async function normalizeApiError(response: Response, currentAccount: bool
         response.status === 401
             ? 'session-expired'
             : response.status === 403
-              ? currentAccount && code === 'human_session_required'
+              ? currentAccount && code === 'email_verification_required'
                   ? 'account-unavailable'
                   : 'access-denied'
               : 'request-failed'

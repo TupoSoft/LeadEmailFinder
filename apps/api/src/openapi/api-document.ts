@@ -1,7 +1,7 @@
 import { INestApplication } from '@nestjs/common'
 import { DocumentBuilder, OpenAPIObject, SwaggerModule } from '@nestjs/swagger'
 import { BFF_SESSION_COOKIE_NAME } from '@tuposoft/lead-email-finder/modules/auth'
-import { buildBrowserDocument } from './browser-document'
+import { buildBrowserDocument, withWorkerAuthentication } from './browser-document'
 
 export type PluginMetadataFactory = Parameters<typeof SwaggerModule.loadPluginMetadata>[0]
 
@@ -32,7 +32,7 @@ export async function buildApiDocuments(
         })
         .build()
     const runtime = SwaggerModule.createDocument(app, configuration)
-    return { runtime, browser: buildBrowserDocument(runtime) }
+    return { runtime, browser: buildBrowserDocument(withWorkerAuthentication(runtime)) }
 }
 
 export function registerApiDocumentation(app: INestApplication, documents: ApiDocuments): void {

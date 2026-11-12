@@ -7,8 +7,8 @@ export type VerificationResult = Extract<VerificationStatus, { state: 'completed
 export type VerificationOperation = components['schemas']['VerificationOperationMetadataDto']
 
 export const verificationQueryKeys = {
-    job: (organizationId: string, id: string) => ['verification', organizationId, 'job', id] as const,
-    submission: (organizationId: string) => ['verification', organizationId, 'submission'] as const,
+    job: (userId: string, id: string) => ['verification', userId, 'job', id] as const,
+    submission: (userId: string) => ['verification', userId, 'submission'] as const,
 }
 
 export function isVerificationId(id: string): boolean {

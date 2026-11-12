@@ -21,44 +21,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/auth/callback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Complete browser authorization
-         * @description Consumes one pending Authorization Code with PKCE response. Success returns to the validated pending /app destination; recoverable failures return to the same-origin error route with a stable safe code.
-         */
-        get: operations["completeBrowserAuthorization"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/auth/login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Start browser authorization */
-        get: operations["loginBrowserSession"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/auth/logout": {
+    "/v1/auth/sign-out": {
         parameters: {
             query?: never;
             header?: never;
@@ -68,30 +31,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * End the browser session
-         * @description Revokes the session and clears its cookies. Cookie-authenticated requests require a matching application Origin (or Referer) and the decoded lef_csrf_token cookie value in x-csrf-token.
+         * Revoke the current browser session
+         * @description Revokes the D1 session and expires its cookies. Requires the exact application Origin and application/json. Repeating sign-out without a current session succeeds.
          */
-        post: operations["logoutBrowserSession"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/auth/session": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Read the current browser account
-         * @description Returns browser-safe identity, membership, organization, capability, and service-client grant data for an authenticated human session.
-         */
-        get: operations["getCurrentAccount"];
-        put?: never;
-        post?: never;
+        post: operations["signOut"];
         delete?: never;
         options?: never;
         head?: never;
@@ -140,6 +83,26 @@ export interface paths {
         };
         /** @description Reads an organization-owned operation without debit or submission. Missing, expired, and foreign operations are concealed with the same 404 response. */
         get: operations["AsyncEmailVerificationController_getAsyncVerificationState"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the verified current user
+         * @description Returns only public user fields. Session tokens, IP addresses, user agents, and provider credentials are never returned. Sessions expire after seven days and renew daily.
+         */
+        get: operations["getCurrentUser"];
         put?: never;
         post?: never;
         delete?: never;
@@ -237,10 +200,6 @@ export interface components {
              */
             state: "unavailable";
         };
-        AuthenticationRequiredResponseDto: {
-            /** @enum {string} */
-            code: "authentication_required";
-        };
         BillingSummaryResponseDto: {
             /** @description Credits usable for new spending: balance minus reserved */
             available: number;
@@ -249,44 +208,15 @@ export interface components {
             /** @description Credits held by accepted operations, not yet charged */
             reserved: number;
         };
-        CurrentAccountContextDto: {
-            /** @description Presentation-only browser capabilities. */
-            capabilities: ("verification.run" | "verification.read" | "team.manage" | "service_clients.manage" | "billing.read" | "billing.manage" | "platform.organizations.manage" | "platform.credits.manage" | "platform.proxies.manage")[];
-            /**
-             * Format: email
-             * @description Current external-identity email, or null when the provider has no email.
-             * @example owner@example.test
-             */
-            email: string | null;
-            /** @description Ordered permissions this human account may grant to a service client. */
-            grantableServiceClientPermissions: ("verification:run" | "verification:read" | "members:manage" | "credentials:manage" | "billing:read" | "billing:manage")[];
-            membership: components["schemas"]["CurrentAccountMembershipDto"];
-            organization: components["schemas"]["CurrentAccountOrganizationDto"];
-        };
-        CurrentAccountMembershipDto: {
-            /**
-             * Format: uuid
-             * @description Active organization membership identifier.
-             */
-            id: string;
-            /**
-             * @description Role of the active organization membership.
-             * @enum {string}
-             */
-            role: "platform_admin" | "owner" | "admin" | "member";
-        };
-        CurrentAccountOrganizationDto: {
-            /**
-             * Format: uuid
-             * @description Active organization identifier.
-             */
-            id: string;
-            /** @description Display name of the active organization. */
-            name: string;
-        };
-        HumanSessionRequiredResponseDto: {
-            /** @enum {string} */
-            code: "human_session_required";
+        CurrentUserResponseDto: {
+            user: {
+                /** Format: email */
+                email: string;
+                emailVerified: boolean;
+                id: string;
+                image: string | null;
+                name: string;
+            };
         };
         VerificationOperationBillingDto: {
             /** @enum {number} */
@@ -423,121 +353,51 @@ export interface operations {
             };
         };
     };
-    completeBrowserAuthorization: {
-        parameters: {
-            query?: {
-                /** @description One-time login state. Missing, blank, repeated, expired, or mismatched values fail safely. */
-                state?: string;
-                /** @description Provider authorization code. Missing, blank, or repeated values follow the safe redirect policy. */
-                code?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Redirects to the validated pending /app destination after success, or to /auth/error with code login_state_invalid, authorization_code_exchange_failed, or active_membership_required. */
-            302: {
-                headers: {
-                    /** @description Prevents storage of the authorization response. */
-                    "Cache-Control"?: "no-store";
-                    /** @description Same-origin application or stable callback-error URL. */
-                    Location?: string;
-                    /** @description Prevents callback parameters from being sent as referrer data. */
-                    "Referrer-Policy"?: "no-referrer";
-                    /** @description Expires the transient login-state cookie. A successful callback also sets the session and CSRF cookies. */
-                    "Set-Cookie"?: string;
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description An unexpected provider, infrastructure, or application failure occurred without exposing detail. */
-            500: {
-                headers: {
-                    /** @description Prevents storage of the authorization response. */
-                    "Cache-Control"?: "no-store";
-                    /** @description Prevents callback parameters from being sent as referrer data. */
-                    "Referrer-Policy"?: "no-referrer";
-                    /** @description Expires the transient login-state cookie. A successful callback also sets the session and CSRF cookies. */
-                    "Set-Cookie"?: string;
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description The provider ID token failed integrity or claim validation. The response contains no provider detail. */
-            502: {
-                headers: {
-                    /** @description Prevents storage of the authorization response. */
-                    "Cache-Control"?: "no-store";
-                    /** @description Prevents callback parameters from being sent as referrer data. */
-                    "Referrer-Policy"?: "no-referrer";
-                    /** @description Expires the transient login-state cookie. A successful callback also sets the session and CSRF cookies. */
-                    "Set-Cookie"?: string;
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    loginBrowserSession: {
-        parameters: {
-            query?: {
-                /** @description Relative application destination under /app. Unsafe, malformed, public, or recovery paths fall back to /app. */
-                destination?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Redirects to the public Keycloak authorization endpoint with a PKCE S256 challenge. */
-            302: {
-                headers: {
-                    /** @description Provider authorization URL. */
-                    Location?: string;
-                    /** @description Sets the transient HttpOnly lef_login_state cookie and clears unusable session and CSRF cookies. */
-                    "Set-Cookie"?: string;
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    logoutBrowserSession: {
+    signOut: {
         parameters: {
             query?: never;
             header?: {
-                /** @description Fallback URL for checking the application origin when Origin is absent. */
-                Referer?: string;
-                /** @description Must match the application origin. A same-origin Referer is accepted when Origin is absent. */
+                /** @description Required by the server and supplied automatically by browsers. Must exactly equal the configured application origin; Referer is not a fallback. */
                 Origin?: string;
             };
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
         responses: {
-            /** @description The session is revoked; the lef_session and lef_csrf_token cookies are cleared. */
-            204: {
+            /** @description The current session is revoked and cookies are expired. */
+            200: {
                 headers: {
-                    /** @description Expires the session and CSRF cookies. */
+                    /** @description Prevents caching protected identity. */
+                    "Cache-Control"?: string;
+                    /** @description Preserves session renewal or expiration cookies. */
                     "Set-Cookie"?: string;
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        /** @enum {boolean} */
+                        success: true;
+                    };
+                };
             };
-            /** @description Authentication is missing, invalid, or expired. */
-            401: {
+            /** @description The JSON body must be an empty object. */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuthenticationRequiredResponseDto"];
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "invalid_request";
+                    };
                 };
             };
-            /** @description The cookie-authenticated request has a missing or invalid Origin, Referer, or CSRF token. */
+            /** @description Origin is missing or does not exactly match the application origin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -545,50 +405,39 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        error: "Forbidden";
-                        /** @enum {string} */
-                        message: "Request origin is not allowed" | "CSRF token is missing or invalid";
-                        /** @enum {integer} */
-                        statusCode: 403;
+                        code: "origin_not_allowed";
                     };
                 };
             };
-        };
-    };
-    getCurrentAccount: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Current browser account context. */
-            200: {
+            /** @description Content-Type must be application/json. */
+            415: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CurrentAccountContextDto"];
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "json_required";
+                    };
                 };
             };
-            /** @description Authentication is missing, invalid, expired, or no longer maps to a usable account. */
-            401: {
+            /** @description The persistent authentication rate limit was exceeded. */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["AuthenticationRequiredResponseDto"];
-                };
+                content?: never;
             };
-            /** @description The authenticated credential is a service client rather than a human session. */
-            403: {
+            /** @description Session revocation could not be confirmed; retry sign-out. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HumanSessionRequiredResponseDto"];
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "sign_out_failed";
+                    };
                 };
             };
         };
@@ -629,7 +478,10 @@ export interface operations {
     AsyncEmailVerificationController_verifyAsync: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Required by the server and supplied automatically by browsers. Must exactly equal the configured application origin; Referer is not a fallback. */
+                Origin?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -690,20 +542,12 @@ export interface operations {
                     };
                 };
             };
-            /** @description The required verification permission or browser mutation protection is missing. */
+            /** @description Email verification or exact application Origin is required. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": {
-                        code?: string;
-                        error?: string;
-                        message?: string;
-                        /** @example 403 */
-                        statusCode?: number;
-                    };
-                };
+                content?: never;
             };
             /** @description The supplied Idempotency-Key was already used for a different address or delivery mode. */
             409: {
@@ -730,6 +574,13 @@ export interface operations {
                         statusCode?: 410;
                     };
                 };
+            };
+            /** @description Content-Type must be application/json. */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description The organization submission rate limit, or a per-address terminal-inconclusive cooldown, was exceeded. */
             429: {
@@ -818,6 +669,54 @@ export interface operations {
                         message: string;
                         /** @enum {integer} */
                         statusCode: 404;
+                    };
+                };
+            };
+        };
+    };
+    getCurrentUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Verified current user. */
+            200: {
+                headers: {
+                    /** @description Prevents caching protected identity. */
+                    "Cache-Control"?: string;
+                    /** @description Preserves session renewal or expiration cookies. */
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentUserResponseDto"];
+                };
+            };
+            /** @description Authentication is missing, expired, or revoked. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "authentication_required";
+                    };
+                };
+            };
+            /** @description The current user has not verified their email. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "email_verification_required";
                     };
                 };
             };

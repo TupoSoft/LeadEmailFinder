@@ -36,7 +36,7 @@ export default defineConfig(async ({ command, isPreview, mode }) => {
     const cloudflarePlugins = cloudflareBuild ? (await import('@cloudflare/vite-plugin')).cloudflare() : []
     const development = command === 'serve' && !isPreview
     const environment = loadEnv(mode, process.cwd(), '')
-    const target = environment.WEB_API_PROXY_TARGET || 'http://localhost:53000'
+    const target = environment.WEB_API_PROXY_TARGET || 'http://127.0.0.1:8787'
     const logger = createLogger()
     const originalError = logger.error.bind(logger)
     logger.error = (message, options) => {

@@ -1,17 +1,161 @@
 import type { OpenAPIObject } from '@nestjs/swagger'
 
+type ResponseObject = Extract<
+    NonNullable<OpenAPIObject['paths'][string]['get']>['responses'][string],
+    { description: string }
+>
+
 const HTTP_METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'] as const
 
 export const BROWSER_OPERATIONS = [
-    { path: '/v1/auth/login', method: 'get' },
-    { path: '/v1/auth/callback', method: 'get' },
-    { path: '/v1/auth/logout', method: 'post' },
-    { path: '/v1/auth/session', method: 'get' },
+    { path: '/v1/auth/sign-out', method: 'post' },
+    { path: '/v1/me', method: 'get' },
     { path: '/v1/billing/summary', method: 'get' },
     { path: '/v1/email-verifications', method: 'post' },
     { path: '/v1/email-verifications/{id}', method: 'get' },
     { path: '/health', method: 'get' },
 ] as const
+
+/** Supply the Worker auth contract while retained application operations still come from Nest. */
+export function withWorkerAuthentication(full: OpenAPIObject): OpenAPIObject {
+    const source = structuredClone(full)
+    const jsonResponse = (description: string, schema: object): ResponseObject => ({
+        description,
+        content: { 'application/json': { schema } },
+    })
+    const codeResponse = (description: string, code: string): ResponseObject =>
+        jsonResponse(description, {
+            type: 'object',
+            additionalProperties: false,
+            required: ['code'],
+            properties: { code: { type: 'string', enum: [code] } },
+        })
+    const originParameter = {
+        in: 'header' as const,
+        name: 'Origin',
+        required: false,
+        description:
+            'Required by the server and supplied automatically by browsers. Must exactly equal the configured application origin; Referer is not a fallback.',
+        schema: { type: 'string', format: 'uri' },
+    }
+    const cookieHeaders = {
+        'Cache-Control': { description: 'Prevents caching protected identity.', schema: { type: 'string' as const } },
+        'Set-Cookie': {
+            description: 'Preserves session renewal or expiration cookies.',
+            schema: { type: 'string' as const },
+        },
+    }
+
+    source.components ??= {}
+    source.components.schemas ??= {}
+    source.components.schemas.CurrentUserResponseDto = {
+        type: 'object',
+        additionalProperties: false,
+        required: ['user'],
+        properties: {
+            user: {
+                type: 'object',
+                additionalProperties: false,
+                required: ['id', 'name', 'email', 'emailVerified', 'image'],
+                properties: {
+                    id: { type: 'string' },
+                    name: { type: 'string' },
+                    email: { type: 'string', format: 'email' },
+                    emailVerified: { type: 'boolean' },
+                    image: { type: 'string', nullable: true },
+                },
+            },
+        },
+    }
+    source.components.securitySchemes ??= {}
+    source.components.securitySchemes.native_session = {
+        type: 'apiKey',
+        in: 'cookie',
+        name: 'better-auth.session_token',
+        description:
+            'D1-backed HttpOnly, SameSite=Lax session. HTTPS uses __Secure-better-auth.session_token and Secure.',
+    }
+
+    source.paths['/v1/me'] = {
+        get: {
+            operationId: 'getCurrentUser',
+            summary: 'Read the verified current user',
+            description:
+                'Returns only public user fields. Session tokens, IP addresses, user agents, and provider credentials are never returned. Sessions expire after seven days and renew daily.',
+            tags: ['Authentication'],
+            security: [{ native_session: [] }],
+            responses: {
+                '200': {
+                    ...jsonResponse('Verified current user.', { $ref: '#/components/schemas/CurrentUserResponseDto' }),
+                    headers: cookieHeaders,
+                },
+                '401': codeResponse('Authentication is missing, expired, or revoked.', 'authentication_required'),
+                '403': codeResponse('The current user has not verified their email.', 'email_verification_required'),
+            },
+        },
+    }
+    source.paths['/v1/auth/sign-out'] = {
+        post: {
+            operationId: 'signOut',
+            summary: 'Revoke the current browser session',
+            description:
+                'Revokes the D1 session and expires its cookies. Requires the exact application Origin and application/json. Repeating sign-out without a current session succeeds.',
+            tags: ['Authentication'],
+            parameters: [originParameter],
+            security: [],
+            requestBody: {
+                required: true,
+                content: { 'application/json': { schema: { type: 'object', additionalProperties: false } } },
+            },
+            responses: {
+                '200': {
+                    ...jsonResponse('The current session is revoked and cookies are expired.', {
+                        type: 'object',
+                        required: ['success'],
+                        additionalProperties: false,
+                        properties: { success: { type: 'boolean', enum: [true] } },
+                    }),
+                    headers: cookieHeaders,
+                },
+                '400': codeResponse('The JSON body must be an empty object.', 'invalid_request'),
+                '403': codeResponse(
+                    'Origin is missing or does not exactly match the application origin.',
+                    'origin_not_allowed',
+                ),
+                '415': codeResponse('Content-Type must be application/json.', 'json_required'),
+                '429': { description: 'The persistent authentication rate limit was exceeded.' },
+                '503': codeResponse('Session revocation could not be confirmed; retry sign-out.', 'sign_out_failed'),
+            },
+        },
+    }
+
+    for (const { path, method } of BROWSER_OPERATIONS) {
+        if (path === '/health' || path === '/v1/me' || path.startsWith('/v1/auth/')) {
+            continue
+        }
+
+        const operation = source.paths[path]?.[method]
+        if (!operation) {
+            continue
+        }
+
+        operation.security = [{ native_session: [] }]
+        if (method === 'post') {
+            operation.parameters = [
+                ...(operation.parameters ?? []).filter(
+                    parameter => !('name' in parameter && parameter.name === 'Origin'),
+                ),
+                originParameter,
+            ]
+            operation.responses['403'] = { description: 'Email verification or exact application Origin is required.' }
+            operation.responses['415'] = { description: 'Content-Type must be application/json.' }
+        }
+    }
+
+    source.tags = [...(source.tags ?? []).filter(tag => tag.name !== 'Authentication'), { name: 'Authentication' }]
+
+    return source
+}
 
 type Node = Record<string, unknown>
 type Kind =

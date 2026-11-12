@@ -26,5 +26,5 @@ export default defineConfig({
     dialect: 'sqlite',
     schema: process.env.DRIZZLE_D1_RESET_SCHEMA === '1' ? './scripts/empty-schema.ts' : './worker/database/schema.ts',
     dbCredentials: { url: pathToFileURL(databasePath).href },
-    tablesFilter: ['users', 'sessions', 'accounts', 'verifications'],
+    tablesFilter: ['users', 'sessions', 'accounts', 'verifications', 'auth_rate_limits'],
 })

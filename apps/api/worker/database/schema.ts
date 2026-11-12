@@ -64,3 +64,10 @@ export const verification = sqliteTable(
     },
     table => [index('verifications_identifier_idx').on(table.identifier)],
 )
+
+export const rateLimit = sqliteTable('auth_rate_limits', {
+    id: text('id').primaryKey(),
+    key: text('key').notNull().unique(),
+    count: integer('count').notNull(),
+    lastRequest: integer('last_request').notNull(),
+})

@@ -1,0 +1,14 @@
+info:
+    name: native-session-unavailable
+    type: http
+    seq: 4
+http:
+    method: GET
+    url: '{{baseUrl}}/v1/auth/get-session'
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('does not expose the native token-bearing session endpoint', function() {
+                expect(res.status).to.equal(404);
+              });

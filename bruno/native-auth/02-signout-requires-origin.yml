@@ -1,0 +1,21 @@
+info:
+    name: signout-requires-origin
+    type: http
+    seq: 2
+http:
+    method: POST
+    url: '{{baseUrl}}/v1/auth/sign-out'
+    headers:
+        - name: Content-Type
+          value: application/json
+    body:
+        type: json
+        data: '{}'
+runtime:
+    scripts:
+        - type: tests
+          code: |-
+              test('requires exact Origin even without a session', function() {
+                expect(res.status).to.equal(403);
+                expect(res.body).to.deep.equal({ code: 'origin_not_allowed' });
+              });

@@ -26,26 +26,20 @@ afterEach(() => {
 })
 
 const account: CurrentAccount = {
-    email: 'owner@example.test',
-    membership: { id: 'owner-a', role: 'owner' },
-    organization: { id: 'organization-a', name: 'Example workspace' },
-    capabilities: ['billing.read', 'billing.manage'],
-    grantableServiceClientPermissions: [],
+    user: { id: 'user-a', name: 'Example user', email: 'owner@example.test', emailVerified: true, image: null },
 }
 function renderBilling({
     path = '/app/billing',
-    capabilities = account.capabilities,
     intercept,
 }: {
     path?: string
-    capabilities?: CurrentAccount['capabilities']
     intercept?: (request: Request) => Response | Promise<Response> | undefined
 } = {}) {
     const fetch = vi.fn((request: Request) => {
         const custom = intercept?.(request)
         if (custom !== undefined) return Promise.resolve(custom)
         const path = new URL(request.url).pathname
-        if (path === '/v1/auth/session') return Promise.resolve(Response.json({ ...account, capabilities }))
+        if (path === '/v1/me') return Promise.resolve(Response.json(account))
         if (path === '/v1/billing/summary')
             return Promise.resolve(Response.json({ balance: 25, reserved: 0, available: 25 }))
         return Promise.resolve(new Response(null, { status: 404 }))
@@ -53,7 +47,6 @@ function renderBilling({
     const session = new AuthSession({
         fetch,
         channelFactory: () => null,
-        readCookies: () => 'lef_csrf_token=csrf-fixture',
     })
     const router = createMemoryRouter(
         [
@@ -93,10 +86,10 @@ describe('billing routes', () => {
         expect(within(panel).getByText('Reserved credits').nextElementSibling).toHaveTextContent('3 credits')
         expect(within(panel).getByText('Total balance').nextElementSibling).toHaveTextContent('10 credits')
         expect(within(panel).getByText(billingCopy.reservationExplanation)).toBeInTheDocument()
-        expect(session.queryClient.getQueryData(billingQueryKeys.summary(account.organization.id))).toEqual(summary)
+        expect(session.queryClient.getQueryData(billingQueryKeys.summary(account.user.id))).toEqual(summary)
         summary = { balance: 1, reserved: 0, available: 1 }
         await act(async () => {
-            await session.queryClient.invalidateQueries({ queryKey: billingQueryKeys.summary(account.organization.id) })
+            await session.queryClient.invalidateQueries({ queryKey: billingQueryKeys.summary(account.user.id) })
         })
         expect(await within(panel).findByText('1')).toBeInTheDocument()
         expect(within(panel).getByText('Reserved credits').nextElementSibling).toHaveTextContent('0 credits')
@@ -120,20 +113,20 @@ describe('billing routes', () => {
         expect(requestsFor(fetch, '/v1/billing/summary')).toHaveLength(2)
     })
 
-    it('allows billing readers to view data without purchase controls', async () => {
-        renderBilling({ capabilities: ['billing.read'] })
+    it('allows verified users to view data without purchase controls', async () => {
+        renderBilling()
         expect(await screen.findByText('25')).toBeInTheDocument()
         expect(screen.queryByRole('button', { name: /Buy / })).not.toBeInTheDocument()
     })
 
-    it('hides billing navigation and data when the capability is absent', async () => {
-        const { fetch } = renderBilling({ capabilities: ['verification.run'] })
-        expect(await screen.findByRole('heading', { name: 'Access denied' })).toBeInTheDocument()
-        expect(screen.queryByRole('link', { name: 'Billing' })).not.toBeInTheDocument()
-        expect(requestsFor(fetch, '/v1/billing/summary')).toHaveLength(0)
+    it('shows billing navigation for a verified personal account', async () => {
+        const { fetch } = renderBilling()
+        expect(await screen.findByRole('heading', { name: 'Billing' })).toBeInTheDocument()
+        expect(screen.getByRole('link', { name: /Billing/ })).toBeInTheDocument()
+        expect(requestsFor(fetch, '/v1/billing/summary')).toHaveLength(1)
     })
 
-    it.each([401, 403])('respects an authoritative %s despite visible capabilities', async status => {
+    it.each([401, 403])('respects an authoritative %s for a verified personal account', async status => {
         const { router } = renderBilling({
             intercept: request =>
                 new URL(request.url).pathname === '/v1/billing/summary' ? new Response(null, { status }) : undefined,

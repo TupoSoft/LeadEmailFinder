@@ -13,5 +13,5 @@ export async function readBillingSummary(api: ApiClient, signal?: AbortSignal): 
 }
 
 export const billingQueryKeys = {
-    summary: (organizationId: string) => ['billing', organizationId, 'summary'] as const,
+    summary: (userId: string) => ['billing', userId, 'summary'] as const,
 }

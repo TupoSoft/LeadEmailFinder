@@ -4,12 +4,8 @@ import type { CurrentAccount } from '../../api/current-account'
 import { AuthSession, currentAccountQueryKey, type BoundaryChannel } from './auth-session'
 import { createApplicationQueryClient, retrySafeRead } from './query-client'
 
-const account = (id = 'membership-1'): CurrentAccount => ({
-    email: null,
-    membership: { id, role: 'owner' },
-    organization: { id: 'same-organization', name: 'Example organization' },
-    capabilities: [],
-    grantableServiceClientPermissions: [],
+const account = (id = 'user-1'): CurrentAccount => ({
+    user: { id, name: 'Example user', email: 'member@example.test', emailVerified: true, image: null },
 })
 
 const NativeRequest = globalThis.Request
@@ -33,7 +29,7 @@ function createSession(
     fetch: (request: Request) => Promise<Response>,
     channelFactory: () => BoundaryChannel | null = () => null,
 ) {
-    return new AuthSession({ fetch, readCookies: () => 'lef_csrf_token=csrf-value', channelFactory })
+    return new AuthSession({ fetch, channelFactory })
 }
 
 async function seedPrivateCaches(session: AuthSession) {
@@ -51,12 +47,12 @@ describe('authenticated cache boundary', () => {
     it('preserves explicit no-referrer and no-store policy when adding the session abort signal', async () => {
         const fetch = vi.fn<(request: Request) => Promise<Response>>(() => Promise.resolve(Response.json(account())))
         const session = createSession(fetch)
-        await session.api.GET('/v1/auth/session', { referrerPolicy: 'no-referrer', cache: 'no-store' })
+        await session.api.GET('/v1/me', { referrerPolicy: 'no-referrer', cache: 'no-store' })
         expect(fetch.mock.calls[0][0].referrerPolicy).toBe('no-referrer')
         expect(fetch.mock.calls[0][0].cache).toBe('no-store')
     })
 
-    it('bootstraps once while a request is pending and uses only same-origin cookie and CSRF transport', async () => {
+    it('bootstraps once while a request is pending and uses only same-origin cookie transport', async () => {
         const fetch = vi.fn<(request: Request) => Promise<Response>>(() => Promise.resolve(Response.json(account())))
         const session = createSession(fetch)
         const first = session.bootstrap()
@@ -71,7 +67,7 @@ describe('authenticated cache boundary', () => {
         expect(request.headers.has('cookie')).toBe(false)
     })
 
-    it('clears query data and mutation variables on sign-out initiation and waits for 204', async () => {
+    it('clears query data and mutation variables on sign-out initiation and waits for confirmed success', async () => {
         const logout = deferred<Response>()
         const fetch = vi.fn<(request: Request) => Promise<Response>>(request =>
             request.method === 'POST' ? logout.promise : Promise.resolve(Response.json(account())),
@@ -85,8 +81,9 @@ describe('authenticated cache boundary', () => {
         expect(session.queryClient.getQueryCache().getAll()).toEqual([])
         expect(session.queryClient.getMutationCache().getAll()).toEqual([])
         await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
-        expect(fetch.mock.calls[1][0].headers.get('x-csrf-token')).toBe('csrf-value')
-        logout.resolve(new Response(null, { status: 204 }))
+        expect(fetch.mock.calls[1][0].headers.get('content-type')).toBe('application/json')
+        expect(await fetch.mock.calls[1][0].clone().json()).toEqual({})
+        logout.resolve(Response.json({ success: true }))
         await first
         expect(session.getSnapshot().status).toBe('signed-out')
     })
@@ -97,7 +94,7 @@ describe('authenticated cache boundary', () => {
             const delayed = deferred<{ previousMember: string }>()
             const session = createSession(request =>
                 Promise.resolve(
-                    request.method === 'POST' ? new Response(null, { status: 204 }) : Response.json(account()),
+                    request.method === 'POST' ? Response.json({ success: true }) : Response.json(account()),
                 ),
             )
             await session.bootstrap()
@@ -140,7 +137,9 @@ describe('authenticated cache boundary', () => {
             const fetch = vi.fn((request: Request) => {
                 if (request.method !== 'POST') return Promise.resolve(Response.json(account()))
                 logoutAttempts += 1
-                return Promise.resolve(new Response(null, { status: logoutAttempts === 1 ? status : 204 }))
+                return Promise.resolve(
+                    logoutAttempts === 1 ? new Response(null, { status }) : Response.json({ success: true }),
+                )
             })
             const session = createSession(fetch)
             await session.bootstrap()
@@ -172,11 +171,11 @@ describe('authenticated cache boundary', () => {
         const oldRead = deferred<Response>()
         let readCount = 0
         const session = createSession(request => {
-            if (request.method === 'POST') return Promise.resolve(new Response(null, { status: 204 }))
+            if (request.method === 'POST') return Promise.resolve(Response.json({ success: true }))
             return ++readCount === 1 ? Promise.resolve(Response.json(account())) : oldRead.promise
         })
         await session.bootstrap()
-        const pending = session.api.GET('/v1/auth/session')
+        const pending = session.api.GET('/v1/me')
         const rejected = expect(pending).rejects.toBeInstanceOf(StaleAuthResponseError)
         await vi.waitFor(() => expect(readCount).toBe(2))
         await session.signOut()
@@ -195,11 +194,11 @@ describe('authenticated cache boundary', () => {
         let readCount = 0
         const session = createSession(request =>
             request.method === 'POST'
-                ? Promise.resolve(new Response(null, { status: 204 }))
+                ? Promise.resolve(Response.json({ success: true }))
                 : Promise.resolve(++readCount === 1 ? Response.json(account()) : lateResponse),
         )
         await session.bootstrap()
-        const pending = session.api.GET('/v1/auth/session')
+        const pending = session.api.GET('/v1/me')
         const rejected = expect(pending).rejects.toBeInstanceOf(StaleAuthResponseError)
         await vi.waitFor(() => expect(json).toHaveBeenCalled())
         await session.signOut()
@@ -208,20 +207,29 @@ describe('authenticated cache boundary', () => {
     })
 
     it.each(['named', 'request'])(
-        'never dispatches an old-generation mutation queued between asynchronous middleware steps (%s)',
+        'aborts an old mutation transport and fences its final promise across sign-out (%s)',
         async operation => {
-            const fetch = vi.fn<(request: Request) => Promise<Response>>(() =>
-                Promise.resolve(new Response(null, { status: 204 })),
-            )
+            const oldResponse = deferred<Response>()
+            const fetch = vi
+                .fn<(request: Request) => Promise<Response>>()
+                .mockImplementationOnce(() => oldResponse.promise)
+                .mockImplementation(() => Promise.resolve(Response.json({ success: true })))
             const session = createSession(fetch)
             const obsolete =
                 operation === 'named'
-                    ? session.api.POST('/v1/auth/logout')
-                    : session.api.request('post', '/v1/auth/logout')
+                    ? session.api.POST('/v1/auth/sign-out', { body: {} })
+                    : session.api.request('post', '/v1/auth/sign-out', { body: {} })
             const rejected = expect(obsolete).rejects.toBeInstanceOf(StaleAuthResponseError)
+            await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce())
+            const previousSignal = fetch.mock.calls[0][0].signal
+
             await session.signOut()
+            oldResponse.resolve(Response.json({ success: true }))
             await rejected
-            expect(fetch).toHaveBeenCalledOnce()
+
+            expect(previousSignal.aborted).toBe(true)
+            expect(fetch).toHaveBeenCalledTimes(2)
+            expect(session.getSnapshot().status).toBe('signed-out')
         },
     )
 
@@ -254,7 +262,7 @@ describe('authenticated cache boundary', () => {
                 new URL(request.url).pathname === '/health'
                     ? Response.json({ raw: 'private-provider-reason' }, { status: 403 })
                     : blockedAccount
-                      ? Response.json({ code: 'human_session_required' }, { status: 403 })
+                      ? Response.json({ code: 'email_verification_required' }, { status: 403 })
                       : Response.json(account()),
             ),
         )
@@ -272,33 +280,47 @@ describe('authenticated cache boundary', () => {
         expect(session.queryClient.getMutationCache().getAll()).toEqual([])
     })
 
-    it.each([false, true])(
-        'replaces a membership in the same organization and rejects old responses (failure: %s)',
-        async failure => {
-            const oldRead = deferred<Response>()
-            let id = 'membership-1'
-            const session = createSession(request =>
-                new URL(request.url).pathname === '/health'
-                    ? oldRead.promise
-                    : Promise.resolve(Response.json(account(id))),
-            )
-            await session.bootstrap()
-            await seedPrivateCaches(session)
-            const pending = session.api.GET('/health')
-            const rejected = expect(pending).rejects.toBeInstanceOf(StaleAuthResponseError)
-            await Promise.resolve()
-            id = 'membership-2'
-            await session.bootstrap()
-            expect(session.getSnapshot()).toMatchObject({ status: 'authenticated', account: account('membership-2') })
-            expect(session.queryClient.getQueryCache().getAll()).toHaveLength(1)
-            expect(session.queryClient.getQueryData(['organization', 'private'])).toBeUndefined()
-            expect(session.queryClient.getMutationCache().getAll()).toEqual([])
-            if (failure) oldRead.reject(new Error('late-failure'))
-            else oldRead.resolve(Response.json({ old: 'organization-data' }))
-            await rejected
-            expect(session.getSnapshot()).toMatchObject({ account: account('membership-2') })
-        },
-    )
+    it('retains private data when a renewed session belongs to the same user', async () => {
+        let name = 'Original name'
+        const session = createSession(() => {
+            const current = account()
+            return Promise.resolve(Response.json({ user: { ...current.user, name } }))
+        })
+        await session.bootstrap()
+        await seedPrivateCaches(session)
+        name = 'Updated name'
+
+        await session.bootstrap()
+
+        expect(session.getSnapshot()).toMatchObject({ status: 'authenticated', account: { user: { name } } })
+        expect(session.queryClient.getQueryData(['organization', 'private'])).toEqual({
+            previousMemberEmail: 'previous@example.test',
+        })
+        expect(session.queryClient.getMutationCache().getAll()).toHaveLength(1)
+    })
+
+    it.each([false, true])('replaces the user identity and rejects old responses (failure: %s)', async failure => {
+        const oldRead = deferred<Response>()
+        let id = 'user-1'
+        const session = createSession(request =>
+            new URL(request.url).pathname === '/health' ? oldRead.promise : Promise.resolve(Response.json(account(id))),
+        )
+        await session.bootstrap()
+        await seedPrivateCaches(session)
+        const pending = session.api.GET('/health')
+        const rejected = expect(pending).rejects.toBeInstanceOf(StaleAuthResponseError)
+        await Promise.resolve()
+        id = 'user-2'
+        await session.bootstrap()
+        expect(session.getSnapshot()).toMatchObject({ status: 'authenticated', account: account('user-2') })
+        expect(session.queryClient.getQueryCache().getAll()).toHaveLength(1)
+        expect(session.queryClient.getQueryData(['organization', 'private'])).toBeUndefined()
+        expect(session.queryClient.getMutationCache().getAll()).toEqual([])
+        if (failure) oldRead.reject(new Error('late-failure'))
+        else oldRead.resolve(Response.json({ old: 'organization-data' }))
+        await rejected
+        expect(session.getSnapshot()).toMatchObject({ account: account('user-2') })
+    })
 
     it('clears a BFcache snapshot before rebootstrap, and pagehide saves only a loading shell', async () => {
         const reload = deferred<Response>()
@@ -315,8 +337,8 @@ describe('authenticated cache boundary', () => {
         window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))
         expect(session.getSnapshot().status).toBe('loading')
         expect(session.queryClient.getMutationCache().getAll()).toEqual([])
-        reload.resolve(Response.json(account('membership-2')))
-        await vi.waitFor(() => expect(session.getSnapshot()).toMatchObject({ account: account('membership-2') }))
+        reload.resolve(Response.json(account('user-2')))
+        await vi.waitFor(() => expect(session.getSnapshot()).toMatchObject({ account: account('user-2') }))
         disconnect()
     })
 })

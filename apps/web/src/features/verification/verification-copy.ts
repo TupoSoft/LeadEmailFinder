@@ -12,7 +12,6 @@ export const verificationCopy = {
         "The request time is too far ahead of the server's time. Check and correct your device's date and time, then select Verify email again.",
     pending: 'Submitting your verification. Please wait before starting another request.',
     insufficient: 'There are not enough credits to run this verification.',
-    owner: 'Contact an organization owner to arrange more credits.',
     billing: 'Go to billing',
     uncertainTitle: 'Submission could not be confirmed',
     uncertain:
@@ -34,7 +33,7 @@ export const verificationCopy = {
     notFound: {
         title: 'Verification not found',
         description:
-            'This verification is not available to your organization. Check the link or start a new verification. Job links are not retained indefinitely.',
+            'This verification is not available to your account. Check the link or start a new verification. Job links are not retained indefinitely.',
     },
     readError: {
         title: 'Verification status unavailable',

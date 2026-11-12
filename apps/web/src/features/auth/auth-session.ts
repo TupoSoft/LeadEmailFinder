@@ -57,12 +57,12 @@ export class AuthSession {
     private readonly listeners = new Set<() => void>()
     private generation = 0
     private abortController = new AbortController()
-    private membershipId: string | undefined
+    private userId: string | undefined
     private hasAuthenticated = false
     private started = false
     private initialAccountAnnounced = false
     private suppressAccount = false
-    private suppressedMembershipId: string | undefined
+    private suppressedUserId: string | undefined
     private bootstrapPromise: Promise<void> | undefined
     private logoutPromise: Promise<void> | undefined
     private readonly channelFactory: () => BoundaryChannel | null
@@ -110,7 +110,7 @@ export class AuthSession {
         this.abortController.abort()
         this.abortController = new AbortController()
         this.bootstrapPromise = undefined
-        this.membershipId = undefined
+        this.userId = undefined
         this.queryClient.clear()
         this.setState(state)
     }
@@ -141,9 +141,9 @@ export class AuthSession {
                 this.assertGeneration(generation)
                 if (response.ok) return response
                 const path = new URL(request.url).pathname
-                const error = await normalizeApiError(response, path === '/v1/auth/session')
+                const error = await normalizeApiError(response, path === '/v1/me')
                 this.assertGeneration(generation)
-                if (path !== '/v1/auth/logout') {
+                if (path !== '/v1/auth/sign-out') {
                     if (error.category === 'session-expired') {
                         this.advance({
                             status:
@@ -174,7 +174,7 @@ export class AuthSession {
         if (this.bootstrapPromise) return this.bootstrapPromise
         this.started = true
         const generation = this.generation
-        const previousMembershipId = this.membershipId
+        const previousUserId = this.userId
         this.setState({ status: 'loading' })
         const pending = this.queryClient
             .fetchQuery({
@@ -188,17 +188,14 @@ export class AuthSession {
                     if (!result.data) throw new ApiError(result.response.status, 'request-failed')
                     if (this.suppressAccount) {
                         // Another tab may bootstrap before the initiating tab's logout reaches the server.
-                        if (
-                            this.suppressedMembershipId === undefined ||
-                            this.suppressedMembershipId === result.data.membership.id
-                        ) {
+                        if (this.suppressedUserId === undefined || this.suppressedUserId === result.data.user.id) {
                             this.advance({ status: 'logout-uncertain' })
                             throw new StaleAuthResponseError()
                         }
                         this.suppressAccount = false
-                        this.suppressedMembershipId = undefined
+                        this.suppressedUserId = undefined
                     }
-                    if (previousMembershipId !== undefined && previousMembershipId !== result.data.membership.id) {
+                    if (previousUserId !== undefined && previousUserId !== result.data.user.id) {
                         this.advance({ status: 'loading' })
                         this.publish('principal-replaced')
                         this.installAccount(result.data)
@@ -229,7 +226,7 @@ export class AuthSession {
             this.initialAccountAnnounced = true
             this.publish('principal-replaced')
         }
-        this.membershipId = account.membership.id
+        this.userId = account.user.id
         this.hasAuthenticated = true
         this.queryClient.setQueryData(currentAccountQueryKey, account)
         this.setState({ status: 'authenticated', account, accessDenied: false })
@@ -257,16 +254,18 @@ export class AuthSession {
 
     signOut = (): Promise<void> => {
         if (this.logoutPromise) return this.logoutPromise
-        this.suppressedMembershipId ??= this.membershipId
+        this.suppressedUserId ??= this.userId
         this.suppressAccount = true
         this.advance({ status: 'signing-out' })
         this.publish('sign-out')
         const generation = this.generation
         const pending = this.api
-            .POST('/v1/auth/logout')
+            .POST('/v1/auth/sign-out', { body: {} })
             .then(result => {
                 this.assertGeneration(generation)
-                if (result.response.status !== 204) throw new ApiError(result.response.status, 'request-failed')
+                if (result.response.status !== 200 || result.data?.success !== true) {
+                    throw new ApiError(result.response.status, 'request-failed')
+                }
                 this.setState({ status: 'signed-out' })
             })
             .catch((error: unknown) => {
@@ -291,7 +290,7 @@ export class AuthSession {
             this.channel.onmessage = ({ data }) => {
                 if (!isBoundaryMessage(data)) return
                 if (data.reason === 'sign-out') {
-                    this.suppressedMembershipId ??= this.membershipId
+                    this.suppressedUserId ??= this.userId
                     this.suppressAccount = true
                 }
                 flush(() => this.advance({ status: 'loading' }))
