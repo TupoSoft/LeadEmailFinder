@@ -28,6 +28,7 @@
         "typecheck": "tsc --noEmit -p tsconfig.json && pnpm --filter @tuposoft/lead-email-finder-api typecheck && tsc --noEmit -p apps/mcp-server/tsconfig.json && pnpm --filter @tuposoft/lead-email-finder-worker typecheck",
         "prepare": "husky || true",
         "dev": "pnpm --filter @tuposoft/lead-email-finder-api dev",
+        "dev:worker": "pnpm --filter @tuposoft/lead-email-finder-api dev",
         "db:sync": "pnpm --filter @tuposoft/lead-email-finder-api db:sync",
         "db:reset": "pnpm --filter @tuposoft/lead-email-finder-api db:reset"
     },
