@@ -24,7 +24,17 @@ export type WorkerEnvironment = {
 }
 
 export function applicationOrigin(configuration: AuthConfiguration): string {
-    const url = new URL(configuration.APP_BASE_URL)
+    let url: URL
+
+    try {
+        if (typeof configuration.APP_BASE_URL !== 'string') {
+            throw new Error('Invalid URL type')
+        }
+
+        url = new URL(configuration.APP_BASE_URL)
+    } catch {
+        throw new Error('APP_BASE_URL must be an HTTP(S) origin.')
+    }
 
     if (
         !['http:', 'https:'].includes(url.protocol) ||
@@ -40,18 +50,26 @@ export function applicationOrigin(configuration: AuthConfiguration): string {
     return url.origin
 }
 
-export function createAuth(database: Database, configuration: AuthConfiguration): ReturnType<typeof betterAuth> {
+export function validateAuthConfiguration(configuration: AuthConfiguration): AuthConfiguration {
     const origin = applicationOrigin(configuration)
+    const secret = configuration.BETTER_AUTH_SECRET
 
-    if (!configuration.BETTER_AUTH_SECRET || configuration.BETTER_AUTH_SECRET.length < 32) {
+    if (typeof secret !== 'string' || secret.length < 32) {
         throw new Error('BETTER_AUTH_SECRET must contain at least 32 characters.')
     }
+
+    return { APP_BASE_URL: origin, BETTER_AUTH_SECRET: secret }
+}
+
+export function createAuth(database: Database, configuration: AuthConfiguration): ReturnType<typeof betterAuth> {
+    const validatedConfiguration = validateAuthConfiguration(configuration)
+    const origin = validatedConfiguration.APP_BASE_URL
 
     const options: BetterAuthOptions = {
         appName: 'Lead Email Finder',
         baseURL: origin,
         basePath: '/v1/auth',
-        secret: configuration.BETTER_AUTH_SECRET,
+        secret: validatedConfiguration.BETTER_AUTH_SECRET,
         trustedOrigins: [origin],
         database: drizzleAdapter(database, {
             provider: 'sqlite',
