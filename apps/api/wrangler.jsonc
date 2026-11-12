@@ -3,6 +3,13 @@
     "name": "lead-email-finder-api",
     "main": "worker/index.ts",
     "compatibility_date": "2026-11-10",
+    "compatibility_flags": ["nodejs_compat"],
+    "vars": {
+        "APP_BASE_URL": "http://127.0.0.1:5173",
+    },
+    "secrets": {
+        "required": ["BETTER_AUTH_SECRET"],
+    },
     "d1_databases": [
         {
             "binding": "DB",

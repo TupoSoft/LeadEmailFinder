@@ -27,7 +27,3 @@ export function safeDestination(value: unknown): string {
         return '/app'
     }
 }
-
-export function signInHref(destination: unknown = '/app'): string {
-    return `/v1/auth/login?destination=${encodeURIComponent(safeDestination(destination))}`
-}

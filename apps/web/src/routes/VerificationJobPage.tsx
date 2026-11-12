@@ -1,6 +1,5 @@
 import { Link, useParams } from 'react-router-dom'
 import { ApiError } from '../api/api-error'
-import { ForbiddenPage } from '../app/AuthRoutes'
 import { useDocumentTitle } from '../app/useDocumentTitle'
 import { useAuth } from '../features/auth/use-auth'
 import { useVerificationJob } from '../features/verification/use-verification'
@@ -15,15 +14,15 @@ import styles from '../features/verification/VerificationView.module.css'
 
 function NewVerificationLink() {
     const { state } = useAuth()
-    return state.status === 'authenticated' && state.account.capabilities.includes('verification.run') ? (
+    return state.status === 'authenticated' ? (
         <Link className={`${action.action} ${action.secondary}`} to="/app/verifications/new">
             {copy.another}
         </Link>
     ) : null
 }
 
-function JobContent({ organizationId, id }: { organizationId: string; id: string }) {
-    const { query, online, available, refresh, pollingStopped } = useVerificationJob(organizationId, id)
+function JobContent({ userId, id }: { userId: string; id: string }) {
+    const { query, online, available, refresh, pollingStopped } = useVerificationJob(userId, id)
     const notFound = query.error instanceof ApiError && query.error.status === 404
     const data = notFound ? undefined : query.data
     const stateCopy = notFound
@@ -94,18 +93,11 @@ export function VerificationJobPage() {
     const { id = '' } = useParams()
     const { state } = useAuth()
     if (state.status !== 'authenticated') return null
-    if (!state.account.capabilities.includes('verification.read')) return <ForbiddenPage />
     if (!isVerificationId(id))
         return (
             <StateMessage {...copy.notFound}>
                 <NewVerificationLink />
             </StateMessage>
         )
-    return (
-        <JobContent
-            key={`${state.account.organization.id}:${id}`}
-            organizationId={state.account.organization.id}
-            id={id}
-        />
-    )
+    return <JobContent key={`${state.account.user.id}:${id}`} userId={state.account.user.id} id={id} />
 }

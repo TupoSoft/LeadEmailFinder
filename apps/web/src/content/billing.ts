@@ -1,9 +1,8 @@
 export const billingCopy = {
     title: 'Billing',
-    description: 'Review your organization’s available credits, reservations, and total balance.',
+    description: 'Review your available credits, reservations, and total balance.',
     balance: 'Credit balance',
-    balanceDescription:
-        'The latest available credits, reservations, and total balance reported by your organization’s account.',
+    balanceDescription: 'The latest available credits, reservations, and total balance reported by your account.',
     available: 'Available credits',
     reserved: 'Reserved credits',
     total: 'Total balance',

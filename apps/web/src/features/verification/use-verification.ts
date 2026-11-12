@@ -16,7 +16,7 @@ type SubmissionState =
     | { phase: 'rate-limited'; request: SubmissionRequest; retryAt?: number }
     | { phase: 'ready'; id: string }
 
-export function useVerificationSubmission(organizationId: string, onCreated: (id: string) => void) {
+export function useVerificationSubmission(userId: string, onCreated: (id: string) => void) {
     const { api, queryClient, mutationOptions, state } = useAuth()
     const mounted = useRef(false)
     useEffect(() => {
@@ -25,7 +25,7 @@ export function useVerificationSubmission(organizationId: string, onCreated: (id
             mounted.current = false
         }
     }, [])
-    const queryKey = verificationQueryKeys.submission(organizationId)
+    const queryKey = verificationQueryKeys.submission(userId)
     const { data: submission } = useQuery<SubmissionState>({
         queryKey,
         queryFn: skipToken,
@@ -43,10 +43,10 @@ export function useVerificationSubmission(organizationId: string, onCreated: (id
         if (read()) queryClient.setQueryData(queryKey, value)
     }
     function refreshBilling() {
-        if (!read() || state.status !== 'authenticated' || !state.account.capabilities.includes('billing.read')) return
+        if (!read() || state.status !== 'authenticated') return
         void queryClient
             .fetchQuery({
-                queryKey: billingQueryKeys.summary(organizationId),
+                queryKey: billingQueryKeys.summary(userId),
                 queryFn: ({ signal }) => readBillingSummary(api, signal),
                 staleTime: 0,
                 retry: false,
@@ -120,10 +120,10 @@ export function useVerificationSubmission(organizationId: string, onCreated: (id
     }
 }
 
-export function useVerificationJob(organizationId: string, id: string) {
+export function useVerificationJob(userId: string, id: string) {
     const { api, queryClient, state } = useAuth()
     const query = useQuery({
-        queryKey: verificationQueryKeys.job(organizationId, id),
+        queryKey: verificationQueryKeys.job(userId, id),
         queryFn: ({ signal }) => readVerification(api, id, signal),
         enabled: false,
         retry: false,
@@ -132,18 +132,18 @@ export function useVerificationJob(organizationId: string, id: string) {
     const status = query.data?.state
     const operation = query.data && 'operation' in query.data ? query.data.operation : undefined
     const billingState = operation?.billing.state
-    const canReadBilling = state.status === 'authenticated' && state.account.capabilities.includes('billing.read')
+    const canReadBilling = state.status === 'authenticated'
     useEffect(() => {
         if (!canReadBilling || (status !== 'completed' && status !== 'failed')) return
         void queryClient
             .fetchQuery({
-                queryKey: billingQueryKeys.summary(organizationId),
+                queryKey: billingQueryKeys.summary(userId),
                 queryFn: ({ signal }) => readBillingSummary(api, signal),
                 staleTime: 0,
                 retry: false,
             })
             .catch(() => undefined)
-    }, [api, billingState, canReadBilling, id, organizationId, queryClient, status])
+    }, [api, billingState, canReadBilling, id, userId, queryClient, status])
     const polling = useVerificationPolling({
         active: status === 'queued' || status === 'running',
         isFetching: query.isFetching,

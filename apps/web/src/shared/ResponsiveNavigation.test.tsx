@@ -2,24 +2,21 @@ import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
-import { visibleDestinations, type ApplicationDestination } from '../app/navigation'
+import { applicationDestinations, type ApplicationDestination } from '../app/navigation'
 import { ResponsiveNavigation } from './ResponsiveNavigation'
 
 const destinations: ApplicationDestination[] = [
     { path: '/app', label: 'Home' },
-    { path: '/app/verifications/new', label: 'Verify an email', capability: 'verification.run' },
-    { path: '/app/billing', label: 'Billing', capability: 'billing.read' },
+    { path: '/app/verifications/new', label: 'Verify an email' },
+    { path: '/app/billing', label: 'Billing' },
 ]
 
 describe('application navigation', () => {
-    it('uses effective capabilities alone for each registered destination', () => {
-        expect(visibleDestinations([], destinations).map(item => item.label)).toEqual(['Home'])
-        expect(visibleDestinations(['verification.run', 'billing.read'], destinations).map(item => item.label)).toEqual(
-            ['Home', 'Verify an email', 'Billing'],
-        )
-        expect(visibleDestinations(['verification.run'], destinations).map(item => item.label)).toEqual([
-            'Home',
-            'Verify an email',
+    it('registers the personal workspace destinations', () => {
+        expect(applicationDestinations.map(item => item.path)).toEqual([
+            '/app',
+            '/app/verifications/new',
+            '/app/billing',
         ])
     })
 

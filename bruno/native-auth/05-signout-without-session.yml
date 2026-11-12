@@ -1,0 +1,29 @@
+info:
+    name: signout-without-session
+    type: http
+    seq: 5
+http:
+    method: POST
+    url: '{{baseUrl}}/v1/auth/sign-out'
+    headers:
+        - name: Origin
+          value: '{{appOrigin}}'
+        - name: Content-Type
+          value: application/json
+    body:
+        type: json
+        data: '{}'
+runtime:
+    assertions:
+        - expression: res.status
+          operator: eq
+          value: '200'
+        - expression: res.body.success
+          operator: eq
+          value: 'true'
+        - expression: Object.keys(res.body)
+          operator: length
+          value: '1'
+        - expression: JSON.stringify(res.headers['set-cookie'])
+          operator: contains
+          value: Max-Age=0

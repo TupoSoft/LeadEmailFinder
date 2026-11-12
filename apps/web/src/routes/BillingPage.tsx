@@ -1,4 +1,3 @@
-import { ForbiddenPage } from '../app/AuthRoutes'
 import { useDocumentTitle } from '../app/useDocumentTitle'
 import { billingCopy } from '../content/billing'
 import { useAuth } from '../features/auth/use-auth'
@@ -7,9 +6,9 @@ import { useBillingQueries } from '../features/billing/use-billing'
 import { useBrowserAvailability } from '../shared/use-browser-availability'
 import styles from '../features/billing/BillingView.module.css'
 
-function BillingContent({ organizationId }: { organizationId: string }) {
+function BillingContent({ userId }: { userId: string }) {
     useDocumentTitle(`${billingCopy.title} | Lead Email Finder`)
-    const queries = useBillingQueries(organizationId)
+    const queries = useBillingQueries(userId)
     const { online } = useBrowserAvailability()
 
     return (
@@ -28,7 +27,6 @@ export function BillingPage() {
     const { state } = useAuth()
     if (state.status !== 'authenticated') return null
     const { account } = state
-    if (!account.capabilities.includes('billing.read')) return <ForbiddenPage />
 
-    return <BillingContent key={account.organization.id} organizationId={account.organization.id} />
+    return <BillingContent key={account.user.id} userId={account.user.id} />
 }

@@ -1,14 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { safeDestination, signInHref } from './destination'
+import { safeDestination } from './destination'
 
-describe('browser sign-in destinations', () => {
+describe('browser application destinations', () => {
     it.each(['/app', '/app/', '/app/credits', '/app/team?view=active#members', '/app/search?q=hello%20world'])(
         'preserves safe application destination %s',
         destination => {
             expect(safeDestination(destination)).toBe(destination)
-            expect(new URL(signInHref(destination), 'https://application.test').searchParams.get('destination')).toBe(
-                destination,
-            )
         },
     )
 

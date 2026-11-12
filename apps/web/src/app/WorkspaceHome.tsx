@@ -1,5 +1,5 @@
 import { useAuth } from '../features/auth/use-auth'
-import { authCopy, capabilityLabels } from '../content/auth-shell'
+import { authCopy, personalTools } from '../content/auth-shell'
 import { StateMessage } from '../shared/StateMessage'
 import action from '../shared/Action.module.css'
 import styles from './WorkspaceHome.module.css'
@@ -24,26 +24,22 @@ export function WorkspaceHome() {
                 <dl>
                     <div>
                         <dt>{authCopy.account}</dt>
-                        <dd>{account.email ?? authCopy.emailUnavailable}</dd>
+                        <dd>{account.user.email}</dd>
                     </div>
                     <div>
-                        <dt>{authCopy.organization}</dt>
-                        <dd>{account.organization.name}</dd>
+                        <dt>{authCopy.name}</dt>
+                        <dd>{account.user.name}</dd>
                     </div>
                 </dl>
             </section>
             <section className={styles.access} aria-labelledby="access-heading">
                 <h2 id="access-heading">{authCopy.access}</h2>
                 <p>{authCopy.accessDescription}</p>
-                {account.capabilities.length ? (
-                    <ul>
-                        {account.capabilities.map(capability => (
-                            <li key={capability}>{capabilityLabels[capability]}</li>
-                        ))}
-                    </ul>
-                ) : (
-                    <p>{authCopy.noAccess}</p>
-                )}
+                <ul>
+                    {personalTools.map(tool => (
+                        <li key={tool}>{tool}</li>
+                    ))}
+                </ul>
             </section>
         </>
     )

@@ -3,12 +3,8 @@ import type { CurrentAccount } from '../../api/current-account'
 import { StaleAuthResponseError } from '../../api/api-error'
 import { AuthSession, type BoundaryChannel } from './auth-session'
 
-const account = (id = 'membership-1'): CurrentAccount => ({
-    email: 'member@example.test',
-    membership: { id, role: 'owner' },
-    organization: { id: 'same-organization', name: 'Example' },
-    capabilities: [],
-    grantableServiceClientPermissions: [],
+const account = (id = 'user-1'): CurrentAccount => ({
+    user: { id, name: 'Example user', email: 'member@example.test', emailVerified: true, image: null },
 })
 const NativeRequest = globalThis.Request
 class BrowserRequest extends NativeRequest {
@@ -75,11 +71,11 @@ describe('same-origin session boundaries', () => {
             { reason: 'principal-replaced' },
             { reason: 'sign-out' },
         ])
-        logout.resolve(new Response(null, { status: 204 }))
+        logout.resolve(Response.json({ success: true }))
         await signingOut
         expect(first.getSnapshot().status).toBe('signed-out')
         expect(second.getSnapshot().status).toBe('logout-uncertain')
-        // An unrelated tab's initial bootstrap must not undo this boundary with the old membership.
+        // An unrelated tab's initial bootstrap must not undo this boundary with the old user.
         const third = new AuthSession({
             channelFactory: bus.create,
             fetch: () => Promise.resolve(Response.json(account())),
@@ -96,20 +92,20 @@ describe('same-origin session boundaries', () => {
 
     it('announces the first safe account after a full callback document reload and replaces existing tabs without a broadcast loop', async () => {
         const bus = channelBus()
-        let id = 'membership-1'
+        let id = 'user-1'
         const fetch = () => Promise.resolve(Response.json(account(id)))
         const existingTab = new AuthSession({ fetch, channelFactory: bus.create })
         const closeExisting = existingTab.connect()
         await existingTab.bootstrap()
         existingTab.queryClient.setQueryData(['private'], 'old-account-data')
-        id = 'membership-2'
+        id = 'user-2'
         const callbackDocument = new AuthSession({ fetch, channelFactory: bus.create })
         const closeNew = callbackDocument.connect()
         await callbackDocument.bootstrap()
         await vi.waitFor(() =>
             expect(existingTab.getSnapshot()).toMatchObject({
                 status: 'authenticated',
-                account: account('membership-2'),
+                account: account('user-2'),
             }),
         )
         expect(existingTab.queryClient.getQueryData(['private'])).toBeUndefined()
@@ -125,11 +121,11 @@ describe('same-origin session boundaries', () => {
         const oldFetch = vi
             .fn()
             .mockImplementationOnce(() => oldResponse.promise)
-            .mockImplementation(() => Promise.resolve(Response.json(account('membership-2'))))
+            .mockImplementation(() => Promise.resolve(Response.json(account('user-2'))))
         const callbackFetch = vi
             .fn()
             .mockImplementationOnce(() => callbackResponse.promise)
-            .mockImplementation(() => Promise.resolve(Response.json(account('membership-2'))))
+            .mockImplementation(() => Promise.resolve(Response.json(account('user-2'))))
         const oldDocument = new AuthSession({ channelFactory: bus.create, fetch: oldFetch })
         const closeOld = oldDocument.connect()
         const pendingOld = oldDocument.bootstrap()
@@ -140,14 +136,14 @@ describe('same-origin session boundaries', () => {
         const closeCallback = callbackDocument.connect()
         const pendingCallback = callbackDocument.bootstrap()
         await vi.waitFor(() => expect(callbackFetch).toHaveBeenCalledOnce())
-        oldResponse.resolve(Response.json(account('membership-1')))
+        oldResponse.resolve(Response.json(account('user-1')))
         await pendingOld
 
         await vi.waitFor(() => {
-            expect(callbackDocument.getSnapshot()).toMatchObject({ account: account('membership-2') })
-            expect(oldDocument.getSnapshot()).toMatchObject({ account: account('membership-2') })
+            expect(callbackDocument.getSnapshot()).toMatchObject({ account: account('user-2') })
+            expect(oldDocument.getSnapshot()).toMatchObject({ account: account('user-2') })
         })
-        callbackResponse.resolve(Response.json(account('membership-2')))
+        callbackResponse.resolve(Response.json(account('user-2')))
         await pendingCallback
         expect(bus.messages).toEqual([{ reason: 'principal-replaced' }, { reason: 'principal-replaced' }])
         closeOld()
@@ -197,7 +193,7 @@ describe('same-origin session boundaries', () => {
             },
             fetch: request =>
                 Promise.resolve(
-                    request.method === 'POST' ? new Response(null, { status: 204 }) : Response.json(account()),
+                    request.method === 'POST' ? Response.json({ success: true }) : Response.json(account()),
                 ),
         })
         const close = session.connect()

@@ -1,0 +1,21 @@
+info:
+    name: me-unauthenticated
+    type: http
+    seq: 1
+http:
+    method: GET
+    url: '{{baseUrl}}/v1/me'
+runtime:
+    assertions:
+        - expression: res.status
+          operator: eq
+          value: '401'
+        - expression: res.body.code
+          operator: eq
+          value: authentication_required
+        - expression: Object.keys(res.body)
+          operator: length
+          value: '1'
+        - expression: res.headers['cache-control']
+          operator: eq
+          value: no-store

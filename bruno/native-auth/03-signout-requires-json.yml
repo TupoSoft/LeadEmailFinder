@@ -1,0 +1,26 @@
+info:
+    name: signout-requires-json
+    type: http
+    seq: 3
+http:
+    method: POST
+    url: '{{baseUrl}}/v1/auth/sign-out'
+    headers:
+        - name: Origin
+          value: '{{appOrigin}}'
+        - name: Content-Type
+          value: text/plain
+    body:
+        type: text
+        data: '{}'
+runtime:
+    assertions:
+        - expression: res.status
+          operator: eq
+          value: '415'
+        - expression: res.body.code
+          operator: eq
+          value: json_required
+        - expression: Object.keys(res.body)
+          operator: length
+          value: '1'

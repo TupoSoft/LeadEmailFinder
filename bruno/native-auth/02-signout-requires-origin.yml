@@ -1,0 +1,24 @@
+info:
+    name: signout-requires-origin
+    type: http
+    seq: 2
+http:
+    method: POST
+    url: '{{baseUrl}}/v1/auth/sign-out'
+    headers:
+        - name: Content-Type
+          value: application/json
+    body:
+        type: json
+        data: '{}'
+runtime:
+    assertions:
+        - expression: res.status
+          operator: eq
+          value: '403'
+        - expression: res.body.code
+          operator: eq
+          value: origin_not_allowed
+        - expression: Object.keys(res.body)
+          operator: length
+          value: '1'

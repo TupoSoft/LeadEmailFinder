@@ -1,6 +1,6 @@
 import type { OpenAPIObject } from '@nestjs/swagger'
 import { execFileSync } from 'node:child_process'
-import { BROWSER_OPERATIONS, buildBrowserDocument } from './browser-document'
+import { BROWSER_OPERATIONS, buildBrowserDocument, withWorkerAuthentication } from './browser-document'
 
 function fixture(): OpenAPIObject {
     return {
@@ -15,9 +15,47 @@ function fixture(): OpenAPIObject {
 }
 
 describe('browser OpenAPI boundary', () => {
+    it('replaces legacy browser auth with sanitized Worker identity and Origin-protected sign-out', () => {
+        const full = fixture()
+        full.paths['/v1/auth/session'] = {
+            get: { responses: { '200': { description: 'Legacy token-bearing session' } } },
+        }
+        full.paths['/v1/auth/get-session'] = {
+            get: { responses: { '200': { description: 'Native token-bearing session' } } },
+        }
+        const original = structuredClone(full)
+
+        const browser = buildBrowserDocument(withWorkerAuthentication(full))
+
+        expect(browser.paths).not.toHaveProperty('/v1/auth/session')
+        expect(browser.paths).not.toHaveProperty('/v1/auth/get-session')
+        expect(browser.paths['/v1/me'].get!.responses).toHaveProperty('403')
+        const userResponse = browser.components!.schemas!.CurrentUserResponseDto
+        expect(userResponse).toMatchObject({
+            additionalProperties: false,
+            required: ['user'],
+            properties: {
+                user: {
+                    additionalProperties: false,
+                    required: ['id', 'name', 'email', 'emailVerified', 'image'],
+                },
+            },
+        })
+        expect(JSON.stringify(userResponse)).not.toMatch(/token|ipAddress|userAgent|organization|membership/)
+        expect(browser.paths['/v1/auth/sign-out'].post).toMatchObject({
+            parameters: [expect.objectContaining({ name: 'Origin', required: false })],
+            responses: { '200': expect.any(Object), '403': expect.any(Object), '415': expect.any(Object) },
+        })
+        expect(browser.components!.securitySchemes).toEqual({
+            native_session: expect.objectContaining({ name: 'better-auth.session_token', in: 'cookie' }),
+        })
+        expect(buildBrowserDocument(withWorkerAuthentication(browser))).toEqual(browser)
+        expect(full).toEqual(original)
+    })
+
     it('keeps exactly the checked path/method pairs and leaves the runtime document unchanged', () => {
         const full = fixture()
-        full.paths['/v1/auth/session'].post = {
+        full.paths['/v1/me'].post = {
             responses: {
                 '200': {
                     description: 'Internal operation',
@@ -61,7 +99,9 @@ describe('browser OpenAPI boundary', () => {
             Object.entries(browser.paths)
                 .flatMap(([path, item]) =>
                     Object.keys(item)
-                        .filter(method => ['get', 'post', 'patch', 'delete', 'put', 'head', 'options', 'trace'].includes(method))
+                        .filter(method =>
+                            ['get', 'post', 'patch', 'delete', 'put', 'head', 'options', 'trace'].includes(method),
+                        )
                         .map(method => `${method} ${path}`),
                 )
                 .sort(),
@@ -137,8 +177,8 @@ describe('browser OpenAPI boundary', () => {
 
     it('retains every reachable component kind across parameters, bodies, responses, callbacks, and links', () => {
         const full = fixture()
-        full.paths['/v1/auth/session'].parameters = [{ $ref: '#/components/parameters/PathParameter' }]
-        full.paths['/v1/auth/session'].get = {
+        full.paths['/v1/me'].parameters = [{ $ref: '#/components/parameters/PathParameter' }]
+        full.paths['/v1/me'].get = {
             parameters: [{ $ref: '#/components/parameters/OperationParameter' }],
             requestBody: { $ref: '#/components/requestBodies/Body' },
             responses: { '200': { $ref: '#/components/responses/Response' } },
@@ -235,7 +275,7 @@ describe('browser OpenAPI boundary', () => {
         const full = fixture()
         full.security = [{ Global: [] }]
         full.paths['/health'].get!.security = []
-        full.paths['/v1/auth/session'].get!.security = [{ Cookie: [], 'Csrf/Token': [] }]
+        full.paths['/v1/me'].get!.security = [{ Cookie: [], 'Csrf/Token': [] }]
         full.components = {
             securitySchemes: {
                 Global: { type: 'http', scheme: 'bearer' },

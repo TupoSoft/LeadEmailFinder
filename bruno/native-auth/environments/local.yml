@@ -1,0 +1,6 @@
+name: local
+variables:
+    - name: baseUrl
+      value: '{{process.env.BRUNO_API_URL}}'
+    - name: appOrigin
+      value: '{{process.env.BRUNO_APP_ORIGIN}}'

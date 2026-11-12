@@ -1,9 +1,7 @@
 import { createApiClient, type ApiClient, type ClientOptions } from '@tuposoft/lead-email-finder-api-client'
-import { createCsrfMiddleware } from './csrf'
 
 export interface BrowserApiClientOptions {
     fetch?: ClientOptions['fetch']
-    readCookies?: () => string
     authenticationBoundary?: () => { signal: AbortSignal; assertCurrent: (error?: unknown) => void }
 }
 
@@ -13,7 +11,6 @@ export function createBrowserApiClient(options: BrowserApiClientOptions = {}): A
         credentials: 'same-origin',
         fetch: options.fetch,
     })
-    client.use(createCsrfMiddleware(options.readCookies))
     if (!options.authenticationBoundary) return client
     const captureBoundary = options.authenticationBoundary
     const methods = new Set(['GET', 'PUT', 'POST', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH', 'TRACE'])

@@ -5,7 +5,7 @@ import { SkipLink } from '../components/SkipLink'
 import { authCopy } from '../content/auth-shell'
 import { ResponsiveNavigation } from '../shared/ResponsiveNavigation'
 import action from '../shared/Action.module.css'
-import { visibleDestinations } from './navigation'
+import { applicationDestinations } from './navigation'
 import styles from './ApplicationFrame.module.css'
 
 export function ApplicationFrame({
@@ -37,13 +37,14 @@ export function ApplicationFrame({
             <div className={styles.layout}>
                 <aside className={styles.sidebar}>
                     <p className={styles.contextLabel}>{authCopy.workspace}</p>
-                    <ResponsiveNavigation destinations={visibleDestinations(account?.capabilities ?? [])} />
+                    <ResponsiveNavigation
+                        destinations={account ? applicationDestinations : applicationDestinations.slice(0, 1)}
+                    />
                     {account ? (
                         <div className={styles.account}>
                             <p className={styles.contextLabel}>{authCopy.account}</p>
-                            <p>{account.email ?? authCopy.emailUnavailable}</p>
-                            <p className={styles.contextLabel}>{authCopy.organization}</p>
-                            <p>{account.organization.name}</p>
+                            <p>{account.user.email}</p>
+                            <p>{account.user.name}</p>
                         </div>
                     ) : null}
                 </aside>

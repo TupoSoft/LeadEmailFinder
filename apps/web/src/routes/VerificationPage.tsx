@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ForbiddenPage } from '../app/AuthRoutes'
 import { useDocumentTitle } from '../app/useDocumentTitle'
 import { useAuth } from '../features/auth/use-auth'
 import { useVerificationSubmission } from '../features/verification/use-verification'
@@ -13,10 +12,10 @@ import action from '../shared/Action.module.css'
 import form from '../shared/Form.module.css'
 import styles from '../features/verification/VerificationView.module.css'
 
-function VerificationForm({ organizationId, canReadBilling }: { organizationId: string; canReadBilling: boolean }) {
+function VerificationForm({ userId }: { userId: string }) {
     const navigate = useNavigate()
     const { submission, start, recover, resetReady } = useVerificationSubmission(
-        organizationId,
+        userId,
         id => void navigate(`/app/verifications/${id}`),
     )
     const [email, setEmail] = useState('')
@@ -116,13 +115,9 @@ function VerificationForm({ organizationId, canReadBilling }: { organizationId: 
                             <>
                                 <h2>Insufficient credits</h2>
                                 <p>{copy.insufficient}</p>
-                                {canReadBilling ? (
-                                    <Link className={`${action.action} ${action.secondary}`} to="/app/billing">
-                                        {copy.billing}
-                                    </Link>
-                                ) : (
-                                    <p>{copy.owner}</p>
-                                )}
+                                <Link className={`${action.action} ${action.secondary}`} to="/app/billing">
+                                    {copy.billing}
+                                </Link>
                             </>
                         ) : null}
                         {uncertain ? (
@@ -191,12 +186,5 @@ export function VerificationPage() {
     const { state } = useAuth()
     if (state.status !== 'authenticated') return null
     const { account } = state
-    if (!account.capabilities.includes('verification.run')) return <ForbiddenPage />
-    return (
-        <VerificationForm
-            key={account.organization.id}
-            organizationId={account.organization.id}
-            canReadBilling={account.capabilities.includes('billing.read')}
-        />
-    )
+    return <VerificationForm key={account.user.id} userId={account.user.id} />
 }
