@@ -1,8 +1,9 @@
 import { sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { routePath } from 'hono/route'
-import { requireApplicationMutation, requireVerifiedUser, signOut, type WorkerEnvironment } from './auth.js'
-import { createDatabase } from './database/connection.js'
+import { requireApplicationMutation, requireVerifiedUser, signOut, type WorkerEnvironment } from './auth'
+import { redeemMagicLink, requestMagicLink } from './auth-magic-link'
+import { createDatabase } from './database/connection'
 
 const app = new Hono<WorkerEnvironment>()
 
@@ -37,6 +38,8 @@ app.use('/v1/*', requireApplicationMutation)
 
 app.get('/v1/me', requireVerifiedUser, context => context.json({ user: context.get('user') }))
 app.post('/v1/auth/sign-out', signOut)
+app.post('/v1/auth/sign-in/magic-link', requestMagicLink)
+app.get('/v1/auth/magic-link/verify', redeemMagicLink)
 
 app.get('/health', async context => {
     context.header('Cache-Control', 'no-store')

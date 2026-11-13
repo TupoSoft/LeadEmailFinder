@@ -1,9 +1,17 @@
+import { createHash } from '@better-auth/utils/hash'
 import { betterAuth, type BetterAuthOptions } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
-import { eq } from 'drizzle-orm'
+import { APIError } from 'better-auth/api'
+import { magicLink } from 'better-auth/plugins/magic-link'
+import { sql } from 'drizzle-orm'
 import type { MiddlewareHandler } from 'hono'
-import { createDatabase, type Database } from './database/connection.js'
-import { account, rateLimit, session, user, verification } from './database/schema.js'
+import type { AuthMailDelivery } from '../src/libs/better-auth/src'
+import {
+    createMagicLinkMessage,
+    MAGIC_LINK_LIFETIME_SECONDS,
+} from '../src/libs/better-auth/src/mail/magic-link-message'
+import { createDatabase, type Database } from './database/connection'
+import { account, rateLimit, session, user, verification } from './database/schema'
 
 export interface AuthConfiguration {
     APP_BASE_URL: string
@@ -23,18 +31,20 @@ export type WorkerEnvironment = {
     Variables: { requestId: string; user: VerifiedUser }
 }
 
-export function applicationOrigin(configuration: AuthConfiguration): string {
-    let url: URL
+function parseApplicationBaseUrl(baseUrl: unknown): URL {
+    if (typeof baseUrl !== 'string') {
+        throw new Error('APP_BASE_URL must be an HTTP(S) origin.')
+    }
 
     try {
-        if (typeof configuration.APP_BASE_URL !== 'string') {
-            throw new Error('Invalid URL type')
-        }
-
-        url = new URL(configuration.APP_BASE_URL)
+        return new URL(baseUrl)
     } catch {
         throw new Error('APP_BASE_URL must be an HTTP(S) origin.')
     }
+}
+
+export function applicationOrigin(configuration: AuthConfiguration): string {
+    const url = parseApplicationBaseUrl(configuration.APP_BASE_URL)
 
     if (
         !['http:', 'https:'].includes(url.protocol) ||
@@ -61,7 +71,11 @@ export function validateAuthConfiguration(configuration: AuthConfiguration): Aut
     return { APP_BASE_URL: origin, BETTER_AUTH_SECRET: secret }
 }
 
-export function createAuth(database: Database, configuration: AuthConfiguration): ReturnType<typeof betterAuth> {
+export function createAuth(
+    database: Database,
+    configuration: AuthConfiguration,
+    mailDelivery?: AuthMailDelivery,
+): ReturnType<typeof betterAuth> {
     const validatedConfiguration = validateAuthConfiguration(configuration)
     const origin = validatedConfiguration.APP_BASE_URL
 
@@ -84,7 +98,39 @@ export function createAuth(database: Database, configuration: AuthConfiguration)
         rateLimit: {
             enabled: true,
             storage: 'database',
+            customRules: {
+                '/sign-in/magic-link': { window: 60, max: 5 },
+                '/magic-link/verify': { window: 60, max: 10 },
+            },
         },
+        plugins: [
+            magicLink({
+                expiresIn: MAGIC_LINK_LIFETIME_SECONDS,
+                disableSignUp: false,
+                storeToken: 'hashed',
+                async sendMagicLink({ email, url, token }) {
+                    if (mailDelivery) {
+                        try {
+                            await mailDelivery.send(createMagicLinkMessage(email, url))
+                            return
+                        } catch {
+                            // Provider failures use the shared cleanup and error response below.
+                        }
+                    }
+
+                    // A failed delivery may have partially succeeded. Revoke its link before reporting failure.
+                    const tokenHash = await createHash('SHA-256', 'base64urlnopad').digest(token)
+                    const verificationIdentifier = `magic-link:${tokenHash}`
+
+                    await database.run(sql`delete from verifications where identifier = ${verificationIdentifier}`)
+
+                    throw new APIError('SERVICE_UNAVAILABLE', {
+                        code: 'magic_link_delivery_failed',
+                        message: 'Could not send a sign-in link. Please try again.',
+                    })
+                },
+            }),
+        ],
         advanced: {
             database: { generateId: 'uuid' },
             ipAddress: { ipAddressHeaders: ['cf-connecting-ip'] },
@@ -189,11 +235,9 @@ export const signOut: MiddlewareHandler<WorkerEnvironment> = async context => {
 
     if (response.ok && currentSession) {
         // Better Auth catches deletion errors internally. Do not confirm logout while the credential still works.
-        const remainingSession = await database
-            .select({ id: session.id })
-            .from(session)
-            .where(eq(session.id, currentSession.session.id))
-            .get()
+        const remainingSession = await database.run(
+            sql`select id from sessions where id = ${currentSession.session.id}`,
+        )
 
         if (remainingSession) {
             console.error(JSON.stringify({ event: 'session_revocation_failed', requestId: context.get('requestId') }))

@@ -589,6 +589,273 @@
         ]
       }
     },
+    "/v1/auth/magic-link/verify": {
+      "get": {
+        "description": "Consumes a hashed, single-use token and redirects with an HttpOnly session cookie. Native token-returning JSON redemption is unavailable. Return destinations must use the application origin, defaulting to /app. Expired or used links and untrusted return destinations redirect to /sign-in?error=invalid-link. An untrusted destination is rejected before consuming the token.",
+        "operationId": "redeemMagicLink",
+        "parameters": [
+          {
+            "description": "The single-use secret from the sign-in email.",
+            "in": "query",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "A same-origin return destination. The error destination is forced to /sign-in.",
+            "in": "query",
+            "name": "callbackURL",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "A same-origin return destination. The error destination is forced to /sign-in.",
+            "in": "query",
+            "name": "newUserCallbackURL",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "A same-origin return destination. The error destination is forced to /sign-in.",
+            "in": "query",
+            "name": "errorCallbackURL",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirects to the safe return destination, or to sign-in when the link is invalid.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Prevents caching protected identity.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Location": {
+                "description": "An absolute URL on the configured application origin.",
+                "schema": {
+                  "format": "uri",
+                  "type": "string"
+                }
+              },
+              "Set-Cookie": {
+                "description": "Preserves session renewal or expiration cookies.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "invalid_request"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The token query or JSON redemption request is invalid."
+          },
+          "429": {
+            "description": "The persistent authentication rate limit was exceeded."
+          }
+        },
+        "security": [],
+        "summary": "Redeem a sign-in link in the browser",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/v1/auth/sign-in/magic-link": {
+      "post": {
+        "description": "Sends the same generic confirmation for existing and new email addresses. Links expire after five minutes and work once. Requires the exact application Origin and application/json. Return destinations must use the application origin; the default is /app.",
+        "operationId": "requestMagicLink",
+        "parameters": [
+          {
+            "description": "Required by the server and supplied automatically by browsers. Must exactly equal the configured application origin; Referer is not a fallback.",
+            "in": "header",
+            "name": "Origin",
+            "required": false,
+            "schema": {
+              "format": "uri",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "callbackURL": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "format": "email",
+                    "type": "string"
+                  },
+                  "errorCallbackURL": {
+                    "type": "string"
+                  },
+                  "newUserCallbackURL": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "email"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "status": {
+                      "enum": [
+                        true
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The sign-in link request was accepted."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "invalid_request"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The email, JSON body, or return destination is invalid."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "origin_not_allowed"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Origin is missing or does not exactly match the application origin."
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "json_required"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Content-Type must be application/json."
+          },
+          "429": {
+            "description": "The persistent authentication rate limit was exceeded."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "enum": [
+                        "magic_link_delivery_failed"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The sign-in email could not be delivered; retry the request."
+          }
+        },
+        "security": [],
+        "summary": "Email a sign-in or signup link",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
     "/v1/auth/sign-out": {
       "post": {
         "description": "Revokes the D1 session and expires its cookies. Requires the exact application Origin and application/json. Repeating sign-out without a current session succeeds.",

@@ -14,7 +14,7 @@
         "start": "nest start -w",
         "debug": "nest start -w -d 0.0.0.0:9229",
         "test": "jest --config ../../jest.config.ts --testPathPatterns apps/api",
-        "test:worker": "D1_LOCAL_TARGET=test pnpm run db:reset && TS_NODE_PROJECT=worker/tsconfig.test.json node --require ts-node/register --test worker/*.test.ts",
+        "test:worker": "D1_LOCAL_TARGET=test pnpm run db:reset && TS_NODE_PROJECT=worker/tsconfig.test.json node --require ts-node/register --test --test-concurrency=1 worker/*.test.ts",
         "pretypecheck": "wrangler types",
         "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.worker.json",
         "predev": "wrangler types && D1_LOCAL_TARGET=dev pnpm run db:sync",

@@ -115,6 +115,52 @@ describe('browser OpenAPI boundary', () => {
         expect(full).toEqual(original)
     })
 
+    it('publishes generic magic-link confirmation and browser-only redemption without session JSON', () => {
+        const browser = buildBrowserDocument(withWorkerAuthentication(fixture()))
+        const request = browser.paths['/v1/auth/sign-in/magic-link'].post!
+        const redemption = browser.paths['/v1/auth/magic-link/verify'].get!
+
+        expect(request.security).toEqual([])
+        expect(request.requestBody).toMatchObject({
+            required: true,
+            content: {
+                'application/json': {
+                    schema: {
+                        additionalProperties: false,
+                        required: ['email'],
+                        properties: {
+                            email: { type: 'string', format: 'email' },
+                            callbackURL: { type: 'string' },
+                            newUserCallbackURL: { type: 'string' },
+                            errorCallbackURL: { type: 'string' },
+                        },
+                    },
+                },
+            },
+        })
+        expect(request.responses['200']).toMatchObject({
+            content: {
+                'application/json': {
+                    schema: {
+                        additionalProperties: false,
+                        required: ['status'],
+                        properties: { status: { type: 'boolean', enum: [true] } },
+                    },
+                },
+            },
+        })
+        expect(Object.keys(request.responses).sort()).toEqual(['200', '400', '403', '415', '429', '503'])
+        expect(redemption.parameters).toContainEqual(
+            expect.objectContaining({ in: 'query', name: 'token', required: true }),
+        )
+        expect(redemption.security).toEqual([])
+        expect(redemption.responses['302']).toMatchObject({
+            headers: { Location: expect.any(Object), 'Set-Cookie': expect.any(Object) },
+        })
+        expect(redemption.responses['302']).not.toHaveProperty('content')
+        expect(redemption.responses).not.toHaveProperty('200')
+    })
+
     it.each(BROWSER_OPERATIONS)('fails if required $method $path is absent', ({ path, method }) => {
         const full = fixture()
         delete full.paths[path][method]

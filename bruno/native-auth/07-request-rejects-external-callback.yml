@@ -1,0 +1,30 @@
+info:
+    name: request-rejects-external-callback
+    type: http
+    seq: 7
+http:
+    method: POST
+    url: '{{baseUrl}}/v1/auth/sign-in/magic-link'
+    headers:
+        - name: Origin
+          value: '{{appOrigin}}'
+        - name: Content-Type
+          value: application/json
+    body:
+        type: json
+        data: |-
+            {
+                "email": "magic-link@example.test",
+                "callbackURL": "https://untrusted.example.test/app"
+            }
+runtime:
+    assertions:
+        - expression: res.status
+          operator: eq
+          value: '400'
+        - expression: res.body.code
+          operator: eq
+          value: invalid_request
+        - expression: Object.keys(res.body)
+          operator: length
+          value: '1'

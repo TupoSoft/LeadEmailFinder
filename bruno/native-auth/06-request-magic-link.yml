@@ -1,0 +1,33 @@
+info:
+    name: request-magic-link
+    type: http
+    seq: 6
+http:
+    method: POST
+    url: '{{baseUrl}}/v1/auth/sign-in/magic-link'
+    headers:
+        - name: Origin
+          value: '{{appOrigin}}'
+        - name: Content-Type
+          value: application/json
+    body:
+        type: json
+        data: |-
+            {
+                "email": "magic-link@example.test",
+                "callbackURL": "/app"
+            }
+runtime:
+    assertions:
+        - expression: res.status
+          operator: eq
+          value: '200'
+        - expression: res.body.status
+          operator: eq
+          value: 'true'
+        - expression: Object.keys(res.body)
+          operator: length
+          value: '1'
+        - expression: res.headers['cache-control']
+          operator: eq
+          value: no-store

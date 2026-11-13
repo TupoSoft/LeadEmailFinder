@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
 import { describe, it, mock } from 'node:test'
-import { AuthMailDeliveryError, type AuthMailMessage } from '../src/libs/better-auth/src/mail/auth-mail-delivery.js'
+import { AuthMailDeliveryError, type AuthMailMessage } from '../src/libs/better-auth/src/mail/auth-mail-delivery'
 import {
     createMagicLinkMessage,
     MAGIC_LINK_LIFETIME_SECONDS,
-} from '../src/libs/better-auth/src/mail/magic-link-message.js'
-import { createAuthMailDelivery, validateAuthMailConfiguration, type AuthMailConfiguration } from './auth-mail.js'
+} from '../src/libs/better-auth/src/mail/magic-link-message'
+import { createAuthMailDelivery, validateAuthMailConfiguration, type AuthMailConfiguration } from './auth-mail'
 
 const from = 'no-reply@example.test'
 const to = 'person+sign-in@example.test'

@@ -12,9 +12,18 @@ const recoveryPaths = new Set(['/app/session-expired', '/app/account-unavailable
 
 function SessionCheck() {
     const { bootstrap } = useAuth()
+    const location = useLocation()
+    const parameters = new URLSearchParams(location.search)
+    const destination = safeDestination(
+        parameters.get('destination') ?? `${location.pathname}${location.search}${location.hash}`,
+    )
+
     return (
         <>
-            <p>{authCopy.signInUnavailable}</p>
+            <p>{authCopy.signInGuidance}</p>
+            <Link className={action.action} to={`/sign-in?destination=${encodeURIComponent(destination)}`}>
+                {authCopy.signIn}
+            </Link>
             <button className={action.action} type="button" onClick={() => void bootstrap()}>
                 {authCopy.checkSession}
             </button>

@@ -1,0 +1,20 @@
+info:
+    name: redemption-rejects-external-callback
+    type: http
+    seq: 8
+http:
+    method: GET
+    url: '{{baseUrl}}/v1/auth/magic-link/verify?token=synthetic-invalid-token&callbackURL=https%3A%2F%2Funtrusted.example.test%2Fapp'
+    headers:
+        - name: Accept
+          value: text/html
+settings:
+    followRedirects: false
+runtime:
+    assertions:
+        - expression: res.status
+          operator: eq
+          value: '302'
+        - expression: res.headers.location
+          operator: eq
+          value: '{{appOrigin}}/sign-in?error=invalid-link'

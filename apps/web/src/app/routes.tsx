@@ -2,6 +2,7 @@ import { Outlet, type RouteObject } from 'react-router-dom'
 import { AuthProvider } from '../features/auth/AuthProvider'
 import { NotFoundPage } from '../routes/NotFoundPage'
 import { PublicEntryPage } from '../routes/PublicEntryPage'
+import { SignInPage } from '../routes/SignInPage'
 import { BillingPage } from '../routes/BillingPage'
 import { VerificationPage } from '../routes/VerificationPage'
 import { VerificationJobPage } from '../routes/VerificationJobPage'
@@ -24,6 +25,7 @@ export const appRoutes: RouteObject[] = [
         ),
         children: [
             { path: '/', element: <PublicEntryPage /> },
+            { path: '/sign-in', element: <SignInPage /> },
             { path: '/auth/error', element: <CallbackErrorPage /> },
             {
                 path: '/app',
