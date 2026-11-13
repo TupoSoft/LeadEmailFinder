@@ -1,13 +1,10 @@
-import {
-    type AuthMailDelivery,
-    AuthMailDeliveryError,
-    type AuthMailMessage,
-} from '../src/libs/better-auth/src'
+import { z } from 'zod'
+import * as authMail from '../src/libs/better-auth/src/mail/auth-mail-delivery'
 
 export type AuthMailConfiguration = Pick<Env, 'AUTH_EMAIL'> & { AUTH_MAIL_FROM: string }
 
-const MAILBOX_PATTERN =
-    /^[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+$/
+const hostnameSchema = z.hostname()
+const emailAddressSchema = z.email().refine(address => hostnameSchema.safeParse(address.split('@')[1]).success)
 
 export function validateAuthMailConfiguration(configuration: AuthMailConfiguration): string | EmailAddress {
     const from = configuration.AUTH_MAIL_FROM
@@ -19,7 +16,7 @@ export function validateAuthMailConfiguration(configuration: AuthMailConfigurati
     const namedAddress = /^([^<>"\r\n]+) <([^<>]+)>$/.exec(from)
     const address = namedAddress?.[2] ?? from
 
-    if (!MAILBOX_PATTERN.test(address) || (namedAddress && !namedAddress[1].trim())) {
+    if (!emailAddressSchema.safeParse(address).success || (namedAddress && !namedAddress[1].trim())) {
         throw new Error('AUTH_MAIL_FROM must be a single email address, optionally with a display name.')
     }
 
@@ -34,20 +31,20 @@ export function validateAuthMailConfiguration(configuration: AuthMailConfigurati
     return address
 }
 
-export function createAuthMailDelivery(configuration: AuthMailConfiguration): AuthMailDelivery {
+export function createAuthMailDelivery(configuration: AuthMailConfiguration): authMail.AuthMailDelivery {
     const from = validateAuthMailConfiguration(configuration)
 
     return {
-        async send(message: AuthMailMessage): Promise<void> {
+        async send(message: authMail.AuthMailMessage): Promise<void> {
             if (
-                !MAILBOX_PATTERN.test(message.to) ||
+                !emailAddressSchema.safeParse(message.to).success ||
                 /[\r\n]/.test(message.to) ||
                 !message.subject.trim() ||
                 /[\r\n]/.test(message.subject) ||
                 message.subject.includes('\0') ||
                 !message.text.trim()
             ) {
-                throw new AuthMailDeliveryError('invalid-message')
+                throw new authMail.AuthMailDeliveryError('invalid-message')
             }
 
             try {
@@ -59,13 +56,13 @@ export function createAuthMailDelivery(configuration: AuthMailConfiguration): Au
                 })
             } catch (error: unknown) {
                 // Provider errors may contain the recipient, link, or raw message. Retain only a bounded reason.
-                throw new AuthMailDeliveryError(deliveryFailureReason(error))
+                throw new authMail.AuthMailDeliveryError(deliveryFailureReason(error))
             }
         },
     }
 }
 
-function deliveryFailureReason(error: unknown): AuthMailDeliveryError['reason'] {
+function deliveryFailureReason(error: unknown): authMail.AuthMailDeliveryError['reason'] {
     const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined
 
     switch (code) {

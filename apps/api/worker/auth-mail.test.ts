@@ -8,7 +8,7 @@ import {
 import { createAuthMailDelivery, validateAuthMailConfiguration, type AuthMailConfiguration } from './auth-mail.js'
 
 const from = 'no-reply@example.test'
-const to = 'person@example.test'
+const to = 'person+sign-in@example.test'
 const link = 'https://app.example.test/v1/auth/magic-link/verify?token=synthetic-secret'
 
 function configuration(
@@ -91,6 +91,7 @@ void describe('Cloudflare authentication mail', () => {
             'private-sender',
             'a@',
             'a@-example.test',
+            'a@example-.test',
             'a@example.test,b@example.test',
             'Name <a@example.test>, <b@example.test>',
             'a@example.test\r\nBcc: private@example.test',
@@ -122,6 +123,7 @@ void describe('Cloudflare authentication mail', () => {
         const message = createMagicLinkMessage(to, link)
         const invalidMessages: AuthMailMessage[] = [
             { ...message, to: '' },
+            { ...message, to: 'a@example-.test' },
             { ...message, to: 'a@example.test,b@example.test' },
             { ...message, to: 'a@example.test\r\nBcc: b@example.test' },
             { ...message, to: 'a@example.test\n' },
