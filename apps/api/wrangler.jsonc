@@ -6,6 +6,7 @@
     "compatibility_flags": ["nodejs_compat"],
     "vars": {
         "APP_BASE_URL": "http://127.0.0.1:5173",
+        "AUTH_MAIL_FROM": "no-reply@example.test",
     },
     "secrets": {
         "required": ["BETTER_AUTH_SECRET"],
@@ -15,6 +16,7 @@
             "binding": "DB",
         },
     ],
+    "send_email": [{ "name": "AUTH_EMAIL" }],
     "observability": {
         "enabled": true,
         "traces": { "enabled": true },
