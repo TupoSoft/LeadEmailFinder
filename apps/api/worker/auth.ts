@@ -1,9 +1,16 @@
 import { betterAuth, type BetterAuthOptions } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
+import { APIError } from 'better-auth/api'
+import { magicLink } from 'better-auth/plugins/magic-link'
 import { eq } from 'drizzle-orm'
 import type { MiddlewareHandler } from 'hono'
-import { createDatabase, type Database } from './database/connection.js'
-import { account, rateLimit, session, user, verification } from './database/schema.js'
+import type { AuthMailDelivery } from '../src/libs/better-auth/src'
+import {
+    createMagicLinkMessage,
+    MAGIC_LINK_LIFETIME_SECONDS,
+} from '../src/libs/better-auth/src/mail/magic-link-message'
+import { createDatabase, type Database } from './database/connection'
+import { account, rateLimit, session, user, verification } from './database/schema'
 
 export interface AuthConfiguration {
     APP_BASE_URL: string
@@ -61,7 +68,20 @@ export function validateAuthConfiguration(configuration: AuthConfiguration): Aut
     return { APP_BASE_URL: origin, BETTER_AUTH_SECRET: secret }
 }
 
-export function createAuth(database: Database, configuration: AuthConfiguration): ReturnType<typeof betterAuth> {
+async function hashMagicLinkToken(token: string): Promise<string> {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))
+
+    return btoa(String.fromCharCode(...new Uint8Array(digest)))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '')
+}
+
+export function createAuth(
+    database: Database,
+    configuration: AuthConfiguration,
+    mailDelivery?: AuthMailDelivery,
+): ReturnType<typeof betterAuth> {
     const validatedConfiguration = validateAuthConfiguration(configuration)
     const origin = validatedConfiguration.APP_BASE_URL
 
@@ -84,7 +104,37 @@ export function createAuth(database: Database, configuration: AuthConfiguration)
         rateLimit: {
             enabled: true,
             storage: 'database',
+            customRules: {
+                '/sign-in/magic-link': { window: 60, max: 5 },
+                '/magic-link/verify': { window: 60, max: 10 },
+            },
         },
+        plugins: [
+            magicLink({
+                expiresIn: MAGIC_LINK_LIFETIME_SECONDS,
+                disableSignUp: false,
+                storeToken: { type: 'custom-hasher', hash: hashMagicLinkToken },
+                async sendMagicLink({ email, url, token }) {
+                    try {
+                        if (!mailDelivery) {
+                            throw new Error('Authentication mail delivery is required.')
+                        }
+
+                        await mailDelivery.send(createMagicLinkMessage(email, url))
+                    } catch {
+                        // A failed delivery may have partially succeeded. Revoke its link before reporting failure.
+                        await database
+                            .delete(verification)
+                            .where(eq(verification.identifier, `magic-link:${await hashMagicLinkToken(token)}`))
+
+                        throw new APIError('SERVICE_UNAVAILABLE', {
+                            code: 'magic_link_delivery_failed',
+                            message: 'Could not send a sign-in link. Please try again.',
+                        })
+                    }
+                },
+            }),
+        ],
         advanced: {
             database: { generateId: 'uuid' },
             ipAddress: { ipAddressHeaders: ['cf-connecting-ip'] },

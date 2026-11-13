@@ -21,6 +21,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/magic-link/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Redeem a sign-in link in the browser
+         * @description Consumes a hashed, single-use token and redirects with an HttpOnly session cookie. Native token-returning JSON redemption is unavailable. Return destinations must use the application origin, defaulting to /app. Expired or used links and untrusted return destinations redirect to /sign-in?error=invalid-link. An untrusted destination is rejected before consuming the token.
+         */
+        get: operations["redeemMagicLink"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/sign-in/magic-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Email a sign-in or signup link
+         * @description Sends the same generic confirmation for existing and new email addresses. Links expire after five minutes and work once. Requires the exact application Origin and application/json. Return destinations must use the application origin; the default is /app.
+         */
+        post: operations["requestMagicLink"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/sign-out": {
         parameters: {
             query?: never;
@@ -348,6 +388,149 @@ export interface operations {
                         };
                         /** @enum {string} */
                         status: "ok" | "error" | "shutting_down";
+                    };
+                };
+            };
+        };
+    };
+    redeemMagicLink: {
+        parameters: {
+            query: {
+                /** @description The single-use secret from the sign-in email. */
+                token: string;
+                /** @description A same-origin return destination. The error destination is forced to /sign-in. */
+                callbackURL?: string;
+                /** @description A same-origin return destination. The error destination is forced to /sign-in. */
+                newUserCallbackURL?: string;
+                /** @description A same-origin return destination. The error destination is forced to /sign-in. */
+                errorCallbackURL?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirects to the safe return destination, or to sign-in when the link is invalid. */
+            302: {
+                headers: {
+                    /** @description Prevents caching protected identity. */
+                    "Cache-Control"?: string;
+                    /** @description An absolute URL on the configured application origin. */
+                    Location?: string;
+                    /** @description Preserves session renewal or expiration cookies. */
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The token query or JSON redemption request is invalid. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "invalid_request";
+                    };
+                };
+            };
+            /** @description The persistent authentication rate limit was exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    requestMagicLink: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required by the server and supplied automatically by browsers. Must exactly equal the configured application origin; Referer is not a fallback. */
+                Origin?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    callbackURL?: string;
+                    /** Format: email */
+                    email: string;
+                    errorCallbackURL?: string;
+                    newUserCallbackURL?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The sign-in link request was accepted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {boolean} */
+                        status: true;
+                    };
+                };
+            };
+            /** @description The email, JSON body, or return destination is invalid. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "invalid_request";
+                    };
+                };
+            };
+            /** @description Origin is missing or does not exactly match the application origin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "origin_not_allowed";
+                    };
+                };
+            };
+            /** @description Content-Type must be application/json. */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "json_required";
+                    };
+                };
+            };
+            /** @description The persistent authentication rate limit was exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The sign-in email could not be delivered; retry the request. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        code: "magic_link_delivery_failed";
                     };
                 };
             };

@@ -20,6 +20,9 @@ export function SiteHeader() {
                         </li>
                     ))}
                     <li>
+                        <Link to="/sign-in">{authCopy.signIn}</Link>
+                    </li>
+                    <li>
                         <Link to="/app">{authCopy.workspace}</Link>
                     </li>
                 </ul>

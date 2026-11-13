@@ -8,6 +8,8 @@ type ResponseObject = Extract<
 const HTTP_METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'] as const
 
 export const BROWSER_OPERATIONS = [
+    { path: '/v1/auth/sign-in/magic-link', method: 'post' },
+    { path: '/v1/auth/magic-link/verify', method: 'get' },
     { path: '/v1/auth/sign-out', method: 'post' },
     { path: '/v1/me', method: 'get' },
     { path: '/v1/billing/summary', method: 'get' },
@@ -125,6 +127,94 @@ export function withWorkerAuthentication(full: OpenAPIObject): OpenAPIObject {
                 '415': codeResponse('Content-Type must be application/json.', 'json_required'),
                 '429': { description: 'The persistent authentication rate limit was exceeded.' },
                 '503': codeResponse('Session revocation could not be confirmed; retry sign-out.', 'sign_out_failed'),
+            },
+        },
+    }
+    source.paths['/v1/auth/sign-in/magic-link'] = {
+        post: {
+            operationId: 'requestMagicLink',
+            summary: 'Email a sign-in or signup link',
+            description:
+                'Sends the same generic confirmation for existing and new email addresses. Links expire after five minutes and work once. Requires the exact application Origin and application/json. Return destinations must use the application origin; the default is /app.',
+            tags: ['Authentication'],
+            parameters: [originParameter],
+            security: [],
+            requestBody: {
+                required: true,
+                content: {
+                    'application/json': {
+                        schema: {
+                            type: 'object',
+                            additionalProperties: false,
+                            required: ['email'],
+                            properties: {
+                                email: { type: 'string', format: 'email' },
+                                callbackURL: { type: 'string' },
+                                newUserCallbackURL: { type: 'string' },
+                                errorCallbackURL: { type: 'string' },
+                            },
+                        },
+                    },
+                },
+            },
+            responses: {
+                '200': jsonResponse('The sign-in link request was accepted.', {
+                    type: 'object',
+                    additionalProperties: false,
+                    required: ['status'],
+                    properties: { status: { type: 'boolean', enum: [true] } },
+                }),
+                '400': codeResponse('The email, JSON body, or return destination is invalid.', 'invalid_request'),
+                '403': codeResponse(
+                    'Origin is missing or does not exactly match the application origin.',
+                    'origin_not_allowed',
+                ),
+                '415': codeResponse('Content-Type must be application/json.', 'json_required'),
+                '429': { description: 'The persistent authentication rate limit was exceeded.' },
+                '503': codeResponse(
+                    'The sign-in email could not be delivered; retry the request.',
+                    'magic_link_delivery_failed',
+                ),
+            },
+        },
+    }
+    source.paths['/v1/auth/magic-link/verify'] = {
+        get: {
+            operationId: 'redeemMagicLink',
+            summary: 'Redeem a sign-in link in the browser',
+            description:
+                'Consumes a hashed, single-use token and redirects with an HttpOnly session cookie. Native token-returning JSON redemption is unavailable. Return destinations must use the application origin, defaulting to /app. Expired or used links and untrusted return destinations redirect to /sign-in?error=invalid-link. An untrusted destination is rejected before consuming the token.',
+            tags: ['Authentication'],
+            security: [],
+            parameters: [
+                {
+                    in: 'query',
+                    name: 'token',
+                    required: true,
+                    description: 'The single-use secret from the sign-in email.',
+                    schema: { type: 'string' },
+                },
+                ...['callbackURL', 'newUserCallbackURL', 'errorCallbackURL'].map(name => ({
+                    in: 'query' as const,
+                    name,
+                    required: false,
+                    description: 'A same-origin return destination. The error destination is forced to /sign-in.',
+                    schema: { type: 'string' as const },
+                })),
+            ],
+            responses: {
+                '302': {
+                    description: 'Redirects to the safe return destination, or to sign-in when the link is invalid.',
+                    headers: {
+                        ...cookieHeaders,
+                        Location: {
+                            description: 'An absolute URL on the configured application origin.',
+                            schema: { type: 'string', format: 'uri' },
+                        },
+                    },
+                },
+                '400': codeResponse('The token query or JSON redemption request is invalid.', 'invalid_request'),
+                '429': { description: 'The persistent authentication rate limit was exceeded.' },
             },
         },
     }

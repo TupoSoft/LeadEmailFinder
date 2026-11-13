@@ -78,9 +78,9 @@ describe('application routes', () => {
         )
 
         expect(await screen.findByRole('heading', { name: 'You are signed out' })).toBeInTheDocument()
-        expect(screen.getByText(/Sign-in is not available yet/)).toBeInTheDocument()
+        expect(screen.getByText(/Sign in with an email link/)).toBeInTheDocument()
         expect(screen.getByRole('button', { name: 'Check session' })).toBeInTheDocument()
-        expect(screen.queryByRole('link', { name: 'Sign in' })).not.toBeInTheDocument()
+        expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/sign-in?destination=%2Fapp')
         expect(router.state.location.pathname).toBe('/app')
         expect(fetch).toHaveBeenCalledOnce()
     })
@@ -98,6 +98,10 @@ describe('application routes', () => {
         expect(await screen.findByRole('heading', { name: 'Your session has expired' })).toBeInTheDocument()
         expect(router.state.location.pathname).toBe('/app/session-expired')
         expect(screen.getByRole('button', { name: 'Check session' })).toBeInTheDocument()
+        expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute(
+            'href',
+            '/sign-in?destination=%2Fapp%3Fview%3Dactivity',
+        )
         expect(screen.queryByText(account.user.email)).not.toBeInTheDocument()
     })
 

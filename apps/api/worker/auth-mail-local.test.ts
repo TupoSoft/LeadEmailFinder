@@ -6,7 +6,7 @@ import { it } from 'node:test'
 import { setTimeout } from 'node:timers/promises'
 import { getPlatformProxy, type PlatformProxy } from 'wrangler'
 import { createMagicLinkMessage } from '../src/libs/better-auth/src/mail/magic-link-message'
-import { createAuthMailDelivery } from './auth-mail.js'
+import { createAuthMailDelivery } from './auth-mail'
 
 void it('captures authentication mail through the native local email simulator', { timeout: 20_000 }, async () => {
     let platform: PlatformProxy<Pick<Env, 'AUTH_EMAIL' | 'AUTH_MAIL_FROM'>> | undefined

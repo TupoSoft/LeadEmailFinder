@@ -1,0 +1,7 @@
+.content {
+    width: min(100%, 36rem);
+}
+
+.address {
+    overflow-wrap: anywhere;
+}

@@ -7,7 +7,8 @@ export const authCopy = {
     closeNavigation: 'Close navigation',
     home: 'Home',
     checkSession: 'Check session',
-    signInUnavailable: 'Sign-in is not available yet. You can check for an existing session.',
+    signIn: 'Sign in',
+    signInGuidance: 'Sign in with an email link, or check for an existing session.',
     signOut: 'Sign out',
     retry: 'Try again',
     notFoundTitle: 'Page not found',
@@ -43,7 +44,7 @@ export const authCopy = {
     },
     signedOut: {
         title: 'You are signed out',
-        description: 'Your session has ended. Check your session to return to your workspace.',
+        description: 'Sign in to open your workspace.',
     },
     logoutUncertain: {
         title: 'Sign-out could not be confirmed',
@@ -60,3 +61,24 @@ export const authCopy = {
 } as const
 
 export const personalTools = ['Run verifications', 'View verification results', 'View billing'] as const
+
+export const signInCopy = {
+    title: 'Sign in or create an account',
+    description: 'Enter your email to get a sign-in link. New here? Your account is created when you use the link.',
+    email: 'Email address',
+    help: 'The link works once and expires after five minutes.',
+    invalidEmail: 'Enter a valid email address, such as name@example.com.',
+    submit: 'Send sign-in link',
+    pending: 'Requesting your sign-in link…',
+    checkTitle: 'Check your email',
+    checkDescription: 'If this address can receive sign-in links, a message will arrive shortly.',
+    checkHelp: 'Open the link within five minutes. You can use it once. Check your spam folder if it does not arrive.',
+    resend: 'Resend link',
+    resent: 'A new link has been requested. Check your inbox.',
+    changeEmail: 'Use another email',
+    invalidLink: 'This link has expired or has already been used. Enter your email to request a new link.',
+    deliveryError: 'We could not send your sign-in link. Try again.',
+    requestError: 'We could not confirm delivery. Check your inbox or try again.',
+    rateLimited: 'Too many requests. Wait a moment before requesting another link.',
+    offline: 'You are offline. Reconnect to request a sign-in link.',
+} as const
