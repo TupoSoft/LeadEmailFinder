@@ -2,7 +2,7 @@ import {
     type AuthMailDelivery,
     AuthMailDeliveryError,
     type AuthMailMessage,
-} from '../src/libs/better-auth/src/mail/auth-mail-delivery.js'
+} from '../src/libs/better-auth/src'
 
 export type AuthMailConfiguration = Pick<Env, 'AUTH_EMAIL'> & { AUTH_MAIL_FROM: string }
 
