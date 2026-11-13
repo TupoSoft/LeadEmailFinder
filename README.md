@@ -39,6 +39,30 @@ serves the browser API contract. Use `corepack pnpm debug` to debug the API on p
 
 For authenticated browser workflows, configure `APP_BASE_URL` and use the [Docker gateway](docker/README.md#single-origin-gateway).
 
+### Worker authentication email
+
+The [Cloudflare mail adapter](apps/api/worker/auth-mail.ts) implements `AuthMailDelivery` using the `AUTH_EMAIL`
+binding and the existing five-minute, single-use [magic-link template](apps/api/src/libs/better-auth/src/mail/magic-link-message.ts).
+It is separate from the SMTP verification worker and the legacy Nest mail transport. The Worker currently exposes
+session lookup and sign-out; this adapter does not add magic-link HTTP routes.
+
+Run `corepack pnpm dev:worker` with `BETTER_AUTH_SECRET` set in the ignored `apps/api/.dev.vars` file
+(at least 32 characters). `AUTH_MAIL_FROM` defaults to the local sender `no-reply@example.test`; it accepts one
+mailbox, optionally written as `Lead Email Finder <no-reply@example.test>`. Invalid sender or binding configuration
+fails at startup. The adapter returns redacted delivery errors without logging recipients, links, or provider diagnostics.
+
+The binding uses [Wrangler's native local simulation](https://developers.cloudflare.com/email-service/observability/local-development/sending/).
+It saves message bodies to local files and prints metadata and the capture file path. Inspect that file to read the
+link; no inbox API or capture database is required. `remote: true` would send real email and is not enabled.
+Run `corepack pnpm --filter ./apps/api test:worker` to exercise message construction, native capture,
+configuration errors, and delivery failures.
+
+Before live delivery, use a [Workers Paid account](https://developers.cloudflare.com/email-service/) for arbitrary
+recipients, manage the sender domain in Cloudflare DNS, and [onboard it for Email Sending](https://developers.cloudflare.com/email-service/get-started/send-emails/).
+Verify the required SPF, DKIM, DMARC, and bounce MX records, then replace `AUTH_MAIL_FROM` in the deployment
+configuration with an address on that onboarded domain. The Worker binding requires no SMTP credentials or API token.
+Domain onboarding, DNS records, and live sender configuration are prerequisites only; this change does not configure them.
+
 ## Checks
 
 ```sh

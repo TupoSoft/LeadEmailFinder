@@ -14,7 +14,7 @@ const origin = 'http://localhost:53000'
 const secret = 'test-only-better-auth-secret-at-least-thirty-two-characters'
 const day = 24 * 60 * 60 * 1000
 
-let platform: PlatformProxy<Pick<Env, 'DB'>>
+let platform: PlatformProxy<Pick<Env, 'DB' | 'AUTH_EMAIL' | 'AUTH_MAIL_FROM'>>
 let database: Database
 
 function environment(baseUrl = origin): WorkerEnvironment['Bindings'] {
@@ -66,7 +66,7 @@ async function request(path: string, options: RequestInit = {}, baseUrl = origin
 }
 
 before(async () => {
-    platform = await getPlatformProxy<Pick<Env, 'DB'>>({
+    platform = await getPlatformProxy<Pick<Env, 'DB' | 'AUTH_EMAIL' | 'AUTH_MAIL_FROM'>>({
         configPath: resolve(__dirname, '../wrangler.jsonc'),
         persist: { path: resolve(__dirname, '../.wrangler/state/test/v3') },
         remoteBindings: false,
