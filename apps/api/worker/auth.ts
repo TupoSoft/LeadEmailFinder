@@ -2,7 +2,7 @@ import { betterAuth, type BetterAuthOptions } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { APIError } from 'better-auth/api'
 import { magicLink } from 'better-auth/plugins/magic-link'
-import { eq } from 'drizzle-orm'
+import { sql } from 'drizzle-orm'
 import type { MiddlewareHandler } from 'hono'
 import type { AuthMailDelivery } from '../src/libs/better-auth/src'
 import {
@@ -30,18 +30,20 @@ export type WorkerEnvironment = {
     Variables: { requestId: string; user: VerifiedUser }
 }
 
-export function applicationOrigin(configuration: AuthConfiguration): string {
-    let url: URL
+function parseApplicationBaseUrl(baseUrl: unknown): URL {
+    if (typeof baseUrl !== 'string') {
+        throw new Error('APP_BASE_URL must be an HTTP(S) origin.')
+    }
 
     try {
-        if (typeof configuration.APP_BASE_URL !== 'string') {
-            throw new Error('Invalid URL type')
-        }
-
-        url = new URL(configuration.APP_BASE_URL)
+        return new URL(baseUrl)
     } catch {
         throw new Error('APP_BASE_URL must be an HTTP(S) origin.')
     }
+}
+
+export function applicationOrigin(configuration: AuthConfiguration): string {
+    const url = parseApplicationBaseUrl(configuration.APP_BASE_URL)
 
     if (
         !['http:', 'https:'].includes(url.protocol) ||
@@ -115,23 +117,24 @@ export function createAuth(
                 disableSignUp: false,
                 storeToken: { type: 'custom-hasher', hash: hashMagicLinkToken },
                 async sendMagicLink({ email, url, token }) {
-                    try {
-                        if (!mailDelivery) {
-                            throw new Error('Authentication mail delivery is required.')
+                    if (mailDelivery) {
+                        try {
+                            await mailDelivery.send(createMagicLinkMessage(email, url))
+                            return
+                        } catch {
+                            // Provider failures use the shared cleanup and error response below.
                         }
-
-                        await mailDelivery.send(createMagicLinkMessage(email, url))
-                    } catch {
-                        // A failed delivery may have partially succeeded. Revoke its link before reporting failure.
-                        await database
-                            .delete(verification)
-                            .where(eq(verification.identifier, `magic-link:${await hashMagicLinkToken(token)}`))
-
-                        throw new APIError('SERVICE_UNAVAILABLE', {
-                            code: 'magic_link_delivery_failed',
-                            message: 'Could not send a sign-in link. Please try again.',
-                        })
                     }
+
+                    // A failed delivery may have partially succeeded. Revoke its link before reporting failure.
+                    const verificationIdentifier = `magic-link:${await hashMagicLinkToken(token)}`
+
+                    await database.run(sql`delete from verifications where identifier = ${verificationIdentifier}`)
+
+                    throw new APIError('SERVICE_UNAVAILABLE', {
+                        code: 'magic_link_delivery_failed',
+                        message: 'Could not send a sign-in link. Please try again.',
+                    })
                 },
             }),
         ],
@@ -239,11 +242,9 @@ export const signOut: MiddlewareHandler<WorkerEnvironment> = async context => {
 
     if (response.ok && currentSession) {
         // Better Auth catches deletion errors internally. Do not confirm logout while the credential still works.
-        const remainingSession = await database
-            .select({ id: session.id })
-            .from(session)
-            .where(eq(session.id, currentSession.session.id))
-            .get()
+        const remainingSession = await database.run(
+            sql`select id from sessions where id = ${currentSession.session.id}`,
+        )
 
         if (remainingSession) {
             console.error(JSON.stringify({ event: 'session_revocation_failed', requestId: context.get('requestId') }))

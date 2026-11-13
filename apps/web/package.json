@@ -21,7 +21,8 @@
         "@tuposoft/lead-email-finder-api-client": "workspace:*",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
-        "react-router-dom": "^7.0.0"
+        "react-router-dom": "^7.0.0",
+        "@react-buddy/ide-toolbox": "^2.5.0"
     },
     "devDependencies": {
         "@cloudflare/vite-plugin": "2.0.0-beta.v.13",
@@ -33,7 +34,7 @@
         "@types/node": "^26.6.6",
         "@types/react": "^19.0.0",
         "@types/react-dom": "^19.0.0",
-        "@vitejs/plugin-react-swc": "^4.0.0",
+        "@vitejs/plugin-react": "^6.3.0",
         "cf": "1.0.0-beta.28",
         "eslint": "^9.34.0",
         "eslint-plugin-react-hooks": "^6.0.0",

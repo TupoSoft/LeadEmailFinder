@@ -1,6 +1,6 @@
 import { createLogger, defineConfig, loadEnv } from 'vite'
 import type { Plugin, ProxyOptions, ViteDevServer } from 'vite'
-import react from '@vitejs/plugin-react-swc'
+import react from '@vitejs/plugin-react'
 import { isApiRequest, STATIC_SECURITY_HEADERS } from './gateway-routes.ts'
 
 // Vite's style injection and React refresh need a nonce; this fixed value is for
