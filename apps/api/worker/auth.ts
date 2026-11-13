@@ -1,3 +1,4 @@
+import { createHash } from '@better-auth/utils/hash'
 import { betterAuth, type BetterAuthOptions } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { APIError } from 'better-auth/api'
@@ -70,15 +71,6 @@ export function validateAuthConfiguration(configuration: AuthConfiguration): Aut
     return { APP_BASE_URL: origin, BETTER_AUTH_SECRET: secret }
 }
 
-async function hashMagicLinkToken(token: string): Promise<string> {
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))
-
-    return btoa(String.fromCharCode(...new Uint8Array(digest)))
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=+$/, '')
-}
-
 export function createAuth(
     database: Database,
     configuration: AuthConfiguration,
@@ -115,7 +107,7 @@ export function createAuth(
             magicLink({
                 expiresIn: MAGIC_LINK_LIFETIME_SECONDS,
                 disableSignUp: false,
-                storeToken: { type: 'custom-hasher', hash: hashMagicLinkToken },
+                storeToken: 'hashed',
                 async sendMagicLink({ email, url, token }) {
                     if (mailDelivery) {
                         try {
@@ -127,7 +119,8 @@ export function createAuth(
                     }
 
                     // A failed delivery may have partially succeeded. Revoke its link before reporting failure.
-                    const verificationIdentifier = `magic-link:${await hashMagicLinkToken(token)}`
+                    const tokenHash = await createHash('SHA-256', 'base64urlnopad').digest(token)
+                    const verificationIdentifier = `magic-link:${tokenHash}`
 
                     await database.run(sql`delete from verifications where identifier = ${verificationIdentifier}`)
 
